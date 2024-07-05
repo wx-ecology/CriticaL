@@ -1,3 +1,5 @@
+## this file turns the movement data used in the COVID analysis into tracks 
+
 library(sf)
 #library(amt)
 library(tidyverse)
