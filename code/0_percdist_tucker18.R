@@ -237,6 +237,24 @@ dat <- dat %>% mutate(BodyMass_kg = log(BodyMass_kg),
                       bd_area_5km = log(bd_area_5km),
                       dist_95 = log(dist_95))  
 
+dat.deer <- dat %>% filter(Species == "hemionus") %>% mutate(NDVI = as.vector(NDVI))
+m600.deer <- lm(dist_95 ~  NDVI + HFI +  perc_dist_5km ,
+                data = dat.deer)
+
+dat.elk <- dat %>% filter(Species == "canadensis") %>% mutate(NDVI = as.vector(NDVI))
+m600.elk <- lm(dist_95 ~  NDVI + HFI +  perc_dist_5km ,
+                data = dat.elk)
+
+dat.pronghorn <- dat %>% filter(Species == "americana") %>% mutate(NDVI = as.vector(NDVI))
+m600.pronghorn <- lm(dist_95 ~  NDVI + HFI +  perc_dist_5km ,
+               data = dat.pronghorn)
+
+dat.others <- dat %>% filter(!Species %in% c("americana", "canadensis", "hemionus")) %>% mutate(NDVI = as.vector(NDVI))
+m600.others <- lme(dist_95 ~ BodyMass_kg + NDVI + HFI + Diet +  perc_dist_5km,
+                   correlation = corHaversine(form=~lon+lat, mimic = "corGaus"), 
+                   random= ~1|Order/Family/Genus/Species,
+                     data = dat.others)
+
 # without perc dist or bd area
 m40 <- lme(dist_95 ~ BodyMass_kg + NDVI + HFI + Diet,
           correlation = corHaversine(form=~lon+lat, mimic = "corGaus"), 
@@ -316,7 +334,7 @@ m90 <- lme(dist_95 ~ BodyMass_kg + NDVI + HFI + Diet + perc_dist_1km + bd_area_1
           data = dat)
 
 dat_clean <- get_clean_dat(m90,3)
-m9 <- lme(dist_95 ~ BodyMass_kg + NDVI + HFI + Diet + perc_dist_10km + bd_area_10km,
+m9 <- lme(dist_95 ~ BodyMass_kg + NDVI + HFI + Diet + perc_dist_1km + bd_area_1km,
           correlation = corHaversine(form=~lon+lat, mimic = "corGaus"), 
           random= ~1|Order/Family/Genus/Species,
           data = dat_clean)
@@ -456,9 +474,10 @@ m180 <- lme(dist_50 ~ BodyMass_kg + NDVI + HFI + Diet + perc_dist_1km + bd_area_
            random= ~1|Order/Family/Genus/Species,
            data = dat)
 dat_clean <- get_clean_dat(m180,3)
-m18 <- lme(dist_50 ~ BodyMass_kg + NDVI + HFI + Diet + perc_dist_10km + bd_area_10km,
+m18 <- lme(dist_50 ~ BodyMass_kg + NDVI + HFI + Diet + perc_dist_1km + bd_area_1km,
           correlation = corHaversine(form=~lon+lat, mimic = "corGaus"), 
           random= ~1|Order/Family/Genus/Species,
+          control = list(msMaxIter = 1000, msMaxEval = 1000),
           data = dat_clean)
 #################################################################
 ###  model comparison and summary ###############################
@@ -471,3 +490,23 @@ aictab(Cand.models.r5km)
 
 Cand.models.r1km <- list ("original" =m7, "pd" = m8, "pd + bd" = m9)
 aictab(Cand.models.r1km)
+
+Cand.models.50.r10km <- list ("original" = m10, "pd" = m11, "pd + bd" = m12)
+aictab(Cand.models.50.r10km)
+
+Cand.models.50.r5km <- list ("original" =m13, "pd" = m14, "pd + bd" = m15)
+aictab(Cand.models.50.r5km)
+
+Cand.models.50.r1km <- list ("original" =m16, "pd" = m17, "pd + bd" = m18)
+aictab(Cand.models.50.r1km)
+
+# July 8th Thomas
+## try 1 h and 1 km data 
+## update people at IOER
+## why is 6km at 5km search radius 
+## look at displacement distances - why and who is the outliers 
+## look at the effect size of the model 
+## maybe have a percolation distance assignment based on animals mobility 
+## check again on available global landscape configuration metrics
+
+## ask MARLEE about the published dataset?
