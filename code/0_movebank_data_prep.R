@@ -82,46 +82,49 @@ movebank_store_credentials("wenjingxu", "Move_1877!0")
 ###########################################################
 
 df <- read_csv("./data/movement/open_movebank/midproduct_raw_movebank_data.csv") # n = 3902306
-# df.raw = df
 
-# target_time_scale_days = 1 # set up the target time scale
-target_time_scale_days = 10 # set up the target time scale
+ target_time_scale_days = 1 # set up the target time scale
+# target_time_scale_days = 10 # set up the target time scale
 
 # --- filter NA locations -- #
 df <- df %>% filter(!is.na(coords_x), !is.na(coords_y)) # n = 3826440
 
 # --- filter based on data duration -- #
+# at least tracked for the targeted time scale (e.g. 10 days) #
+
 df.summary <- df %>%
   group_by(study_id, individual_id, deployment_id) %>%
   summarise( temp_interval = median(diff(timestamp)),
              duration = max(timestamp) - min(timestamp)) %>%
   mutate( temp_interval_hours = as.numeric(temp_interval)/3600,
           duration_days = as.numeric(duration)/(3600*24))
-df.keep <- df.summary %>% filter(duration_days >= target_time_scale_days)  # at least tracked for 10 days
+df.keep <- df.summary %>% filter(duration_days >= target_time_scale_days) 
 
 # reduce dataset to individuals monitored for at least xx days at once
-df.filtered <- df %>%
+df <- df %>%
   filter(study_id %in% df.keep$study_id,
          individual_id %in% df.keep$individual_id,
          deployment_id %in% df.keep$deployment_id)
+rm(df.summary, df.keep)
 
-# delete study not in lat lon 
-df.filtered <- df.filtered %>% filter(study_id != 4732684199 ) # coordinates of study id not in lat/lon; n = 3792215 points left
+# --- filter based on data duration -- #
+bad_id = unique(df[which(abs(df$coords_x) > 180 ),]$study_id)
+df <- df %>% filter(!study_id %in% bad_id ) # coordinates of study id not in lat/lon; n = 3792215 points left (10d) n = 3825479 (1d)
 
 # generate remaining data info df, create unique ID for each individual (4 digit ID + species)
-df.filtered.info <- df.filtered %>% ungroup() %>%
+df.info <- df %>% ungroup() %>%
   dplyr::select(study_id, individual_id, species, study_name, contact) %>% distinct() %>% 
   mutate(
     individual_id = as.character(individual_id),
     ID = paste0(str_sub(individual_id, -4,-1), "_", species)
 ) 
-nrow(df.filtered.info) #n_ind = 473
-any(duplicated(df.filtered.info$ID))
+nrow(df.info) #n_ind = 473 (10d) n_ind = 536 (1d)
+any(duplicated(df.info$ID))
 
 ###############################################################################
 ####  filter data into 10/1 day intervals and calculate disp -----------------   
 ###############################################################################
-TenDayDisp_df <- df.filtered %>%
+xDayDisp_df <- df %>%
   mutate(date = as.Date(timestamp)) %>%
   group_by(study_id, individual_id, deployment_id) %>%
   arrange(timestamp) %>%
@@ -135,25 +138,32 @@ TenDayDisp_df <- df.filtered %>%
     last_timestamp = last(timestamp),    # Capture the last timestamp for reference
     
     # Check if the first point and the last point are 10 days apart
-    timediffs = difftime(last_timestamp, first_timestamp, units = "hours"))  # n = 21218
+    timediffs = difftime(last_timestamp, first_timestamp, units = "hours"))  # n = 21,218 (10d) n = 195,859) 
 
 # delete data if not enough recorded locations in each time segment
-TenDayDisp_df  <- TenDayDisp_df %>% 
-  filter(as.numeric(timediffs) > 24*0.9*target_time_scale_days) %>% # give it a 10% tolerance # n = 18081
-  mutate(ten_day_displacement_km = distHaversine(first_point, last_point) / 1000) # calculate displacement in km 
+xDayDisp_df  <- xDayDisp_df %>% 
+  filter(as.numeric(timediffs) > 24*0.9*target_time_scale_days) %>% # give it a 10% tolerance # n = 18,081, n = 81,965
+  mutate(#ten_day_displacement_km = distHaversine(first_point, last_point) / 1000, 
+         one_day_displacement_km = distHaversine(first_point, last_point) / 1000) # calculate displacement in km 
 
 # calculate middle point for percolation distance extraction 
-TenDayDisp_df <- TenDayDisp_df %>% ungroup() %>%
+xDayDisp_df <- xDayDisp_df %>% ungroup() %>%
   mutate(mid_point = midPoint(first_point, last_point),  # get middle point
          midLongitude = mid_point[,1], midLatitude = mid_point[,2]) %>% # only  # get middle position for extracting percolation distance 
-  rename(Displacement_km = ten_day_displacement_km) %>%
+  rename(#Displacement_km = ten_day_displacement_km,
+         Displacement_km = one_day_displacement_km) %>%
   dplyr:: select(-deployment_id, -day_group, -timediffs)
 
-move10d_movebank <- TenDayDisp_df %>% mutate(individual_id = as.character(individual_id)) %>%
-  left_join(df.filtered.info, by = c('study_id', 'individual_id')) %>%
-  dplyr::select(-individual_id) # n = 18,081
+# move10d_movebank <- xDayDisp_df %>% mutate(individual_id = as.character(individual_id)) %>%
+#   left_join(df.info, by = c('study_id', 'individual_id')) %>%
+#   dplyr::select(-individual_id) # n = 18,081
+move1d_movebank <- xDayDisp_df %>% mutate(individual_id = as.character(individual_id)) %>%
+  left_join(df.info, by = c('study_id', 'individual_id')) %>%
+  dplyr::select(-individual_id) # n = 81,965
+rm(xDayDisp_df)
 
-write_rds(move10d_movebank, "./data/movement/open_movebank/midproduct_move10d_movebank.rds")
+#write_rds(move10d_movebank, "./data/movement/open_movebank/midproduct_move10d_movebank.rds")
+#write_rds(move1d_movebank, "./data/movement/open_movebank/midproduct_move1d_movebank.rds")
 
 ###############################################################################
 ####  Environmental covariates extraction  ------------------------------------   
@@ -165,9 +175,10 @@ library(geojsonio)
 ee_Initialize()
 ee_Authenticate() 
 
-move10d_movebank <- read_rds("./data/movement/open_movebank/midproduct_move10d_movebank.rds") %>% mutate(unique_serial = row_number(.))
+#movebank <- read_rds("./data/movement/open_movebank/midproduct_move10d_movebank.rds") %>% mutate(unique_serial = row_number(.))
+movebank <- read_rds("./data/movement/open_movebank/midproduct_move1d_movebank.rds") %>% mutate(unique_serial = row_number(.))
 
-env.sf <- move10d_movebank %>% 
+env.sf <- movebank %>% 
   dplyr::select(unique_serial, first_point, last_point, first_timestamp, last_timestamp) %>%
   pivot_longer(cols = c(first_point, last_point), names_to = "point", values_to = "coordinates" ) %>%
   mutate(Longitude = coordinates[,1], Latitude = coordinates[,2],
@@ -179,33 +190,46 @@ env.sf <- move10d_movebank %>%
 modis_ndvi <- ee$ImageCollection("MODIS/006/MOD13Q1")$select("NDVI")
 
 # extract image dates from the image collection to later combine with points
-modis_dates = ee_get_date_ic(modis_ndvi)$time_start
+modis_dates = ee_get_date_ic(modis_ndvi)$time_start # n = 529
 
 # match modis date with point date
 env.sf <- env.sf %>% 
   mutate(modis_date = as.character(modis_dates[findInterval(TimestampUTC, modis_dates)]))
 
 # Loop through each group and extract NDVI
-ndvi_list <- tibble()
+#ndvi_list <- tibble()
 for (i in as.character(unique(env.sf $modis_date))[1:length(unique(env.sf $modis_date))] ) {
   
   points_group = env.sf %>% filter(modis_date == i) 
   
-  filtered_modis <- modis_ndvi$
+  # above limit when there are more than 5000 points to be extracted at once.
+  if (nrow(points_group) >= 5000) {
+    n = ceiling(nrow(points_group)/4999)
+    points_group$Group <- rep(1:n, each = 4999, length.out = nrow(points_group))
+  } else ( points_group$Group <- 1)
+  
+  for (ii in 1:n) {
+  
+    points_group_ii <- points_group %>% filter(Group == ii)
+    
+    filtered_modis <- modis_ndvi$
     filterDate(as.character(i))$ 
     median()  # reduce from IC to image 
   
   ndvi_values <- ee_extract(
     x = filtered_modis,
-    y = points_group["unique_serial"],
+    y = points_group_ii["unique_serial"],
     scale = 250,  # MODIS resolution
     fun = ee$Reducer$mean()    # Aggregation function (not critical for points)
   )
   
   ndvi_list <- rbind(ndvi_list, ndvi_values)
+  }
   
-} # run time around 7 min
-move10d_movebank <- move10d_movebank %>% 
+} # run time around 7 min for move 10d, forever, for move 1d
+
+# merge NDVI with other displacement info 
+movebank <- movebank %>% 
   left_join(ndvi_list %>% group_by(unique_serial) %>% 
               summarise (NDVI = mean(NDVI)), # all environmental covariates for each segment are the mean of the start and the end point values
             by = "unique_serial")
@@ -222,21 +246,31 @@ HMI <- project(HMI, "EPSG: 4326")
 env.sf$HFI <- terra::extract(HFI, env.sf)[,-1]
 env.sf$HMI <- terra::extract(HMI, env.sf)[,-1]
 
-# merge NDVI, HFI, and HMI back with movebank data
-move10d_movebank <- move10d_movebank %>% 
+# merge NDVI, HFI, and HMI back with displacement df
+movebank <- movebank %>% 
   left_join(env.sf %>% st_drop_geometry(.) %>% 
               group_by(unique_serial) %>% 
               summarise (HFI = mean(HFI),
                       HMI = mean(HMI)), # all environmental covariates for each segment are the mean of the start and the end point values
             by = "unique_serial")
 
-# write_rds(move10d_movebank, 
+ # write_rds(movebank %>% distinct(), 
+ #           "./data/movement/open_movebank/midproduct_movebank_1d_disp_w_envinfo.rds")
+
+# write_rds(movebank %>% distinct(), 
 #           "./data/movement/open_movebank/midproduct_movebank_10d_disp_w_envinfo.rds")
 
+###############################################################################
+##########  Species covariates extraction  ------------------------------------   
+###############################################################################
+# movebank <- read_rds("./data/movement/open_movebank/midproduct_movebank_1d_disp_w_envinfo.rds")
+
+# movebank <- read_rds("./data/movement/open_movebank/midproduct_movebank_10d_disp_w_envinfo.rds")
+
 # extract species, Diet, BodyMass_kg info -----------------   
-diet <- read_csv("./data/EltonTraits/MamFuncDat.csv") %>% filter(Scientific %in% unique(move10d_movebank.sf$species))
-sum(unique(move10d_movebank.sf$species) %in% unique(diet$Scientific))
-unique(move10d_movebank.sf$species) [which(!unique(move10d_movebank.sf$species) %in% unique(diet$Scientific))]
+diet <- read_csv("./data/EltonTraits/MamFuncDat.csv") %>% filter(Scientific %in% unique(movebank$species))
+sum(unique(movebank$species) %in% unique(diet$Scientific))
+unique(movebank$species) [which(!unique(movebank$species) %in% unique(diet$Scientific))]
 # "Sapajus macrocephalus" is a subspecies of ""Sapajus apella". but both not in the database.
 
 diet <- diet %>% mutate(Diet = 
@@ -249,7 +283,7 @@ diet <- diet %>% mutate(Diet =
   dplyr::select(Scientific, Diet, BodyMass_kg) %>%
   rename(species = Scientific)
 
-move10d_movebank.sf <- move10d_movebank.sf %>% left_join(diet, by = "species")
+movebank <- movebank %>% left_join(diet, by = "species")
 
 # extract taxonomy info from PANTHERIA -----------------   
 pant <- read_csv("./data/PanTHERIA_1-0_WR05_Aug2008.csv")
@@ -261,7 +295,7 @@ pant <- pant[,1:5] %>%
           Binomial = MSW05_Binomial) 
 
 # find out which species are not listed in panethria database 
-move10d_movebank.sf  %>% filter(!species %in% pant$Binomial) %>% dplyr::select(species) %>% distinct() 
+movebank  %>% filter(!species %in% pant$Binomial) %>% dplyr::select(species) %>% distinct() 
 #Sapajus macrocephalus is also not included in the pantheria databse. 
 
 # add Sapajus apella (of which Sapajus macrocephalus is a subspecies of)
@@ -272,12 +306,13 @@ pant = rbind(pant,
                         Species = c("apella macrocephalus"), 
                         Binomial = c("Sapajus apella macrocephalus")))
 
-move10d_movebank.sf  <- move10d_movebank.sf  %>% rename (Binomial = species ) %>% left_join(pant, by = "Binomial")
-# length(unique(move10d_movebank.sf $Binomial)) # 22 species
+movebank  <- movebank  %>% rename (Binomial = species ) %>% left_join(pant, by = "Binomial")
+# length(unique(movebank$Binomial)) # 22 species // 17 species for 1 day
 
-move10d_movebank <- move10d_movebank.sf %>% 
-  st_drop_geometry() %>%                    
-  cbind(st_coordinates(move10d_movebank.sf)) %>%
-  rename(Longitude = X, Latitude = Y) %>% dplyr::select(-modis_date, -unique_serial)
+movebank <- movebank %>%                    
+  mutate(Longitude = last_point[,1], Latitude = last_point[,2],
+         TimestampUTC = last_timestamp) %>%
+  dplyr::select(-unique_serial, - first_point, -mid_point, -first_timestamp, -last_timestamp, -last_point)
 
-write_rds(move10d_movebank, "./data/movement/open_movebank/move10d_movebank.rds")
+#write_rds(movebank, "./data/movement/move10d_movebank.rds")
+write_rds(movebank, "./data/movement/move1d_movebank.rds")
