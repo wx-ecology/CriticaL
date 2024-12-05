@@ -96,8 +96,8 @@ df.summary <- df %>%
   group_by(study_id, individual_id, deployment_id) %>%
   summarise( temp_interval = median(diff(timestamp)),
              duration = max(timestamp) - min(timestamp)) %>%
-  mutate( temp_interval_hours = as.numeric(temp_interval)/3600,
-          duration_days = as.numeric(duration)/(3600*24))
+  mutate( temp_interval_hours = as.numeric(temp_interval, "hours"),
+          duration_days = as.numeric(duration, "days"))
 df.keep <- df.summary %>% filter(duration_days >= target_time_scale_days) 
 
 # reduce dataset to individuals monitored for at least xx days at once
