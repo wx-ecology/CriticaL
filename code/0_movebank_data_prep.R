@@ -45,9 +45,9 @@ movebank_store_credentials("wenjingxu", "Move_1877!0")
 #     dplyr::mutate(coords_x=sf::st_coordinates(.)[,1], coords_y=sf::st_coordinates(.)[,2], crs = sf::st_crs(mv.i)$input) %>%
 #     sf::st_drop_geometry(.)
 #   df.i <- tibble(study_id = id, 
-#                  study_name = movebank_download_study_info(study_id = id)$name,
+#                  StudyName = movebank_download_study_info(study_id = id)$name,
 #                  mv.i, 
-#                  contact = movebank_download_study_info(study_id = id)$contact_person_name) %>%
+#                  ContactPerson = movebank_download_study_info(study_id = id)$contact_person_name) %>%
 #     left_join(tibble(deployment_id = mt_track_data(mv.i)$deployment_id,
 #                      species =  mt_track_data(mv.i)$taxon_canonical_name), by = "deployment_id")
 #   df <- rbind(df,df.i)
@@ -113,7 +113,7 @@ df <- df %>% filter(!study_id %in% bad_id ) # coordinates of study id not in lat
 
 # generate remaining data info df, create unique ID for each individual (4 digit ID + species)
 df.info <- df %>% ungroup() %>%
-  dplyr::select(study_id, individual_id, species, study_name, contact) %>% distinct() %>% 
+  dplyr::select(study_id, individual_id, species, StudyName, ContactPerson) %>% distinct() %>% 
   mutate(
     individual_id = as.character(individual_id),
     ID = paste0(str_sub(individual_id, -4,-1), "_", species)
