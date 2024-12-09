@@ -88,4 +88,4 @@ move_reshape <- move %>%
                  Displacement_km, Binomial,study_name, contact)
 }
 
-write_rds(move_reshape, paste0("./data/movement/Tucker_7704108/midproduct_move", target_time_scale_days , "d_covid.rds"))
+write_rds(move_reshape, paste0("./data/movement/midproduct/midproduct_move", target_time_scale_days , "d_covid.rds"))

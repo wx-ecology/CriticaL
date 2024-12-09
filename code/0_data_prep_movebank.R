@@ -155,5 +155,5 @@ move_movebank <- xDayDisp_df %>% mutate(individual_id = as.character(individual_
 
 rm(xDayDisp_df)
 
-#write_rds(move_movebank, paste0("./data/movement/open_movebank/midproduct_move", target_time_scale_days , "d_movebank.rds"))
+#write_rds(move_movebank, paste0("./data/movement/midproduct/midproduct_move", target_time_scale_days , "d_movebank.rds"))
 
