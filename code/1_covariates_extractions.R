@@ -9,13 +9,13 @@ library(rgee)
 library(terra)
 
 ee_Initialize()
-#ee_Authenticate() 
+# ee_Authenticate() 
 ee_check()
 
 #setwd("/Users/wenjing/Senckenberg Dropbox/Wenjing Xu/CriticaL/")
 
-target_time_scale_days = 10
-target_set = "movebank" # "covid", "movebank", "oodata" 
+target_time_scale_days = 1
+target_set = "oodata" # "covid", "movebank", "oodata" 
 
 move = read_rds(paste0(
   "./data/movement/midproduct/",
@@ -47,45 +47,45 @@ modis_ndvi <- ee$ImageCollection("MODIS/006/MOD13Q1")$select("NDVI")
 modis_dates = ee_get_date_ic(modis_ndvi)$time_start # n = 529
 
 # match modis date with point date
-env.sf <- env.sf %>% 
+env.sf <- env.sf %>%
   mutate(modis_date = as.character(modis_dates[findInterval(TimestampUTC, modis_dates)]))
 
 # Loop through each group and extract NDVI
 ndvi_list <- tibble()
-milestones <- seq(10, 90, by = 10)  
+milestones <- seq(10, 90, by = 10)
 last_reported_milestone <- 0
 
 for (i in as.character(unique(env.sf $modis_date))[1:length(unique(env.sf $modis_date))] ) {
-  
-  points_group = env.sf %>% filter(modis_date == i) 
-  
+
+  points_group = env.sf %>% filter(modis_date == i)
+
   n = ceiling(nrow(points_group)/4999)
-  
+
   # above limit when there are more than 5000 points to be extracted at once.
   if (n > 1) {
     points_group$Group <- rep(1:n, each = 4999, length.out = nrow(points_group))
   } else {points_group$Group <- 1}
-  
+
   for (ii in 1:n) {
-  
+
     points_group_ii <- points_group %>% filter(Group == ii)
-    
+
     filtered_modis <- modis_ndvi$
-    filterDate(as.character(i))$ 
-    median()  # reduce from IC to image 
-  
+    filterDate(as.character(i))$
+    median()  # reduce from IC to image
+
   ndvi_values <- ee_extract(
     x = filtered_modis,
     y = points_group_ii["unique_serial"],
     scale = 250,  # MODIS resolution
     fun = ee$Reducer$mean()    # Aggregation function (not critical for points)
   )
-  
+
   ndvi_list <- rbind(ndvi_list, ndvi_values)
-  
-  # progress tracking 
+
+  # progress tracking
   percentage_completed  = which(as.character(unique(env.sf$modis_date)) == i)/length(unique(env.sf $modis_date))*100
-    
+
     # Check if the percentage has reached the next milestone
     for (milestone in milestones) {
       if (percentage_completed >= milestone && milestone > last_reported_milestone) {
@@ -94,10 +94,10 @@ for (i in as.character(unique(env.sf $modis_date))[1:length(unique(env.sf $modis
       }
     }
   }}
-  
-# merge NDVI with other displacement info 
-move <- move %>% 
-  left_join(ndvi_list %>% group_by(unique_serial) %>% 
+
+# merge NDVI with other displacement info
+move <- move %>%
+  left_join(ndvi_list %>% group_by(unique_serial) %>%
               summarise (NDVI = mean(NDVI)), # all environmental covariates for each segment are the mean of the start and the end point values
             by = "unique_serial")
 
@@ -158,52 +158,92 @@ move.pd = data.frame()
 for (i in unique(move.mid.sf$Binomial)) {
   move.mid.sf.spp.i <- move.mid.sf %>% filter(Binomial == i)
   disp_range_hi <- (mobility_summary %>% filter(Binomial == i))$displacement_hi
+  disp_range_me <- (mobility_summary %>% filter(Binomial == i))$displacement_me
   
+  # first extract pd that matches long movements 
   if (disp_range_hi < 2 ) {
-    move.mid.sf.spp.i$pd_scale = 1
-    move.mid.sf.spp.i$pd_adpt <- terra::extract(perc_dist_1km, move.mid.sf.spp.i)[,-1]
-    move.mid.sf.spp.i$bd_adpt <- terra::extract(build_dens_1km, move.mid.sf.spp.i)[,-1]
+    move.mid.sf.spp.i$pd_scale_hi = 1
+    move.mid.sf.spp.i$pd_adpt_hi <- terra::extract(perc_dist_1km, move.mid.sf.spp.i)[,-1]
+    move.mid.sf.spp.i$bd_adpt_hi <- terra::extract(build_dens_1km, move.mid.sf.spp.i)[,-1]
   } else {
     if (disp_range_hi < 5 ) {
-      move.mid.sf.spp.i$pd_scale = 2.5
-      move.mid.sf.spp.i$pd_adpt <- terra::extract(perc_dist_2p5km, move.mid.sf.spp.i)[,-1]
-      move.mid.sf.spp.i$bd_adpt <- terra::extract(build_dens_2p5km, move.mid.sf.spp.i)[,-1]
+      move.mid.sf.spp.i$pd_scale_hi = 2.5
+      move.mid.sf.spp.i$pd_adpt_hi <- terra::extract(perc_dist_2p5km, move.mid.sf.spp.i)[,-1]
+      move.mid.sf.spp.i$bd_adpt_hi <- terra::extract(build_dens_2p5km, move.mid.sf.spp.i)[,-1]
     } else {
       if (disp_range_hi < 10 ) {
-        move.mid.sf.spp.i$pd_scale = 5
-        move.mid.sf.spp.i$pd_adpt <- terra::extract(perc_dist_5km, move.mid.sf.spp.i)[,-1]
-        move.mid.sf.spp.i$bd_adpt <- terra::extract(build_dens_5km, move.mid.sf.spp.i)[,-1]
+        move.mid.sf.spp.i$pd_scale_hi = 5
+        move.mid.sf.spp.i$pd_adpt_hi <- terra::extract(perc_dist_5km, move.mid.sf.spp.i)[,-1]
+        move.mid.sf.spp.i$bd_adpt_hi <- terra::extract(build_dens_5km, move.mid.sf.spp.i)[,-1]
       } else {
         if (disp_range_hi < 15 ) {
-          move.mid.sf.spp.i$pd_scale = 7.5
-          move.mid.sf.spp.i$pd_adpt <- terra::extract(perc_dist_7p5km, move.mid.sf.spp.i)[,-1]
-          move.mid.sf.spp.i$bd_adpt <- terra::extract(build_dens_7p5km, move.mid.sf.spp.i)[,-1]
+          move.mid.sf.spp.i$pd_scale_hi = 7.5
+          move.mid.sf.spp.i$pd_adpt_hi <- terra::extract(perc_dist_7p5km, move.mid.sf.spp.i)[,-1]
+          move.mid.sf.spp.i$bd_adpt_hi <- terra::extract(build_dens_7p5km, move.mid.sf.spp.i)[,-1]
         } else {
           if (disp_range_hi < 20) {
-            move.mid.sf.spp.i$pd_scale = 10
-            move.mid.sf.spp.i$pd_adpt <- terra::extract(perc_dist_10km, move.mid.sf.spp.i)[,-1]
-            move.mid.sf.spp.i$bd_adpt <- terra::extract(build_dens_10km, move.mid.sf.spp.i)[,-1]
+            move.mid.sf.spp.i$pd_scale_hi = 10
+            move.mid.sf.spp.i$pd_adpt_hi <- terra::extract(perc_dist_10km, move.mid.sf.spp.i)[,-1]
+            move.mid.sf.spp.i$bd_adpt_hi <- terra::extract(build_dens_10km, move.mid.sf.spp.i)[,-1]
           } else {
-            move.mid.sf.spp.i$pd_scale = 15 
-            move.mid.sf.spp.i$pd_adpt <- terra::extract(perc_dist_15km, move.mid.sf.spp.i)[,-1]
-            move.mid.sf.spp.i$bd_adpt <- terra::extract(build_dens_15km, move.mid.sf.spp.i)[,-1]
+            move.mid.sf.spp.i$pd_scale_hi = 15 
+            move.mid.sf.spp.i$pd_adpt_hi <- terra::extract(perc_dist_15km, move.mid.sf.spp.i)[,-1]
+            move.mid.sf.spp.i$bd_adpt_hi <- terra::extract(build_dens_15km, move.mid.sf.spp.i)[,-1]
           }
         }
       }
     }
   }
+  
+  # then extract pd that matches median movements 
+  if (disp_range_me < 2 ) {
+    move.mid.sf.spp.i$pd_scale_me = 1
+    move.mid.sf.spp.i$pd_adpt_me <- terra::extract(perc_dist_1km, move.mid.sf.spp.i)[,-1]
+    move.mid.sf.spp.i$bd_adpt_me <- terra::extract(build_dens_1km, move.mid.sf.spp.i)[,-1]
+  } else {
+    if (disp_range_me < 5 ) {
+      move.mid.sf.spp.i$pd_scale_me = 2.5
+      move.mid.sf.spp.i$pd_adpt_me <- terra::extract(perc_dist_2p5km, move.mid.sf.spp.i)[,-1]
+      move.mid.sf.spp.i$bd_adpt_me <- terra::extract(build_dens_2p5km, move.mid.sf.spp.i)[,-1]
+    } else {
+      if (disp_range_me < 10 ) {
+        move.mid.sf.spp.i$pd_scale_me = 5
+        move.mid.sf.spp.i$pd_adpt_me <- terra::extract(perc_dist_5km, move.mid.sf.spp.i)[,-1]
+        move.mid.sf.spp.i$bd_adpt_me <- terra::extract(build_dens_5km, move.mid.sf.spp.i)[,-1]
+      } else {
+        if (disp_range_me < 15 ) {
+          move.mid.sf.spp.i$pd_scale_me = 7.5
+          move.mid.sf.spp.i$pd_adpt_me <- terra::extract(perc_dist_7p5km, move.mid.sf.spp.i)[,-1]
+          move.mid.sf.spp.i$bd_adpt_me <- terra::extract(build_dens_7p5km, move.mid.sf.spp.i)[,-1]
+        } else {
+          if (disp_range_me < 20) {
+            move.mid.sf.spp.i$pd_scale_me = 10
+            move.mid.sf.spp.i$pd_adpt_me <- terra::extract(perc_dist_10km, move.mid.sf.spp.i)[,-1]
+            move.mid.sf.spp.i$bd_adpt_me <- terra::extract(build_dens_10km, move.mid.sf.spp.i)[,-1]
+          } else {
+            move.mid.sf.spp.i$pd_scale_me = 15 
+            move.mid.sf.spp.i$pd_adpt_me <- terra::extract(perc_dist_15km, move.mid.sf.spp.i)[,-1]
+            move.mid.sf.spp.i$bd_adpt_me <- terra::extract(build_dens_15km, move.mid.sf.spp.i)[,-1]
+          }
+        }
+      }
+    }
+  }
+  
   move.pd <- rbind (move.pd , move.mid.sf.spp.i)
 }
 
 ## ---- fill NAs -------------------------
 ## fill NAs using the diameter values 
 move.mid.sf <-  move.pd  %>% mutate(
-  pd_adpt = ifelse(pd_adpt == -200, pd_scale*1000*2,pd_adpt)
+  pd_adpt_hi = ifelse(pd_adpt_hi == -200, pd_scale_hi*1000*2,pd_adpt_hi),
+  pd_adpt_me = ifelse(pd_adpt_me == -200, pd_scale_me*1000*2,pd_adpt_me)
 )
 
 ## turn NA building density to 0 ----- ##
 move.mid.sf <-  move.mid.sf  %>% mutate(
-  bd_adpt = ifelse(is.na(bd_adpt), 0, bd_adpt)
+  bd_adpt_hi = ifelse(is.na(bd_adpt_hi), 0, bd_adpt_hi),
+  bd_adpt_me = ifelse(is.na(bd_adpt_me), 0, bd_adpt_me)
 )
 
 move <- move.mid.sf %>% st_drop_geometry()
@@ -279,8 +319,12 @@ unique(move %>% filter(is.na(Diet)) %>% pull(Binomial) )
 # mannually adding 
 if (target_set == "covid") {
   move <- move %>% mutate(Diet = case_when(Binomial %in% c("Cervus canadensis", "Tragelaphus sylvaticus") ~ "Herbivore",
-                                               .default = Diet))
+                                               .default = Diet),
+                          BodyMass_kg = case_when(Binomial == "Cervus canadensis" ~ 300.51, # number from Tucker covid dataset
+                                                  Binomial == "Tragelaphus sylvaticus" ~ 37.50, # number from Tucker covid dataset 
+                                                  .default = BodyMass_kg))
 }
+
 
 
 ###### step 6: final data organization  -----------------   
@@ -295,3 +339,4 @@ if (target_set == "oodata") {
 } else {
   write_rds(move, paste0("./data/movement/ready_data/move",target_time_scale_days,"d_", target_set,".rds"))
 }
+
