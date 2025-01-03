@@ -72,7 +72,7 @@ move.sum <- move %>%
                               median(Displacement_km, na.rm = T)),
     
     # percolation distances 
-    pd_adpt = mean(pd_adpt[pd_adpt >=0], na.rm = T), # only summarize percolation distance when there is a value 
+    pd_adpt_km = mean(pd_adpt[pd_adpt >=0], na.rm = T)/1000, # only summarize percolation distance when there is a value 
     
     #building densities 
     bd_adpt = mean(bd_adpt, na.rm = T),
@@ -111,7 +111,7 @@ move.sum <- move.sum %>%
          log_HFI = ifelse(HFI==0, log(HFI+0.001), log(HFI)),
          log_HMI = ifelse(HMI==0, log(HMI+0.001), log(HMI)),
          log_dist_2_build = log(dist_2_build),
-         log_pd = log(pd_adpt),
+         log_pd = log(pd_adpt_km),
          log_bd = ifelse(bd_adpt==0, log(bd_adpt+0.001), log(bd_adpt)),
          log_Displacement_km = log(Displacement_km)) %>%
   rename(lon = Longitude,

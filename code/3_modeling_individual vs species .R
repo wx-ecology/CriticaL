@@ -13,8 +13,8 @@ library(ggplot2)
 ###################################################
 # ----- read data and prep data for modeling ------ 
 ###################################################
-target_time_scale_days = 1
-tartget_spatial_scale = "hi" 
+target_time_scale_days = 10
+tartget_spatial_scale = "me" 
 
 move_covid <- read_rds( paste0("./data/movement/ready_data/move", target_time_scale_days,"d_covid.rds"))
 move_movebank <- read_rds(paste0("./data/movement/ready_data/move", target_time_scale_days,"d_movebank.rds"))
@@ -69,7 +69,7 @@ move.sum <- move %>%
                               median(Displacement_km, na.rm = T)),
     
     # percolation distances 
-    pd_adpt = mean(pd_adpt[pd_adpt >=0], na.rm = T), # only summarize percolation distance when there is a value 
+    pd_adpt_km = mean(pd_adpt[pd_adpt >=0], na.rm = T)/1000, # only summarize percolation distance when there is a value 
     
     #building densities 
     bd_adpt = mean(bd_adpt, na.rm = T),
@@ -107,7 +107,7 @@ move.sum <- move.sum %>%
          log_HFI = ifelse(HFI==0, log(HFI+0.001), log(HFI)),
          log_HMI = ifelse(HMI==0, log(HMI+0.001), log(HMI)),
          log_dist_2_build = log(dist_2_build),
-         log_pd = log(pd_adpt),
+         log_pd = log(pd_adpt_km),
          log_bd = ifelse(bd_adpt==0, log(bd_adpt+0.001), log(bd_adpt)),
          log_Displacement_km = log(Displacement_km)) %>%
   rename(lon = Longitude,
@@ -121,6 +121,10 @@ move.sum <- move.sum %>% left_join(pd.spp) %>% mutate(log_pd_ind = log_pd - log_
 colSums(is.na(move.sum))
 sapply(move.sum, function(col) sum(is.nan(col)))
 sapply(move.sum, function(col) sum(is.infinite(col)))
+
+write_rds(move.sum, paste0("./data/movement/ready_data/move_",target_time_scale_days, "d_",
+                           tartget_spatial_scale,
+                           ".rds"))
 
 ###################################################
 # -------------------- run models -----------------
