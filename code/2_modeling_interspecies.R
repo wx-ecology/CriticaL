@@ -17,7 +17,7 @@ get_clean_dat <- function (m, threshold) {
 # ----- read data and prep data for modeling ------ 
 ###################################################
 target_time_scale_days = 1
-tartget_spatial_scale = "me" 
+tartget_spatial_scale = "hi" 
 
 move_covid <- read_rds( paste0("./data/movement/ready_data/move", target_time_scale_days,"d_covid.rds"))
 move_movebank <- read_rds(paste0("./data/movement/ready_data/move", target_time_scale_days,"d_movebank.rds"))
@@ -151,6 +151,8 @@ for (i in c("log_HFI", "log_HMI", "log_bd") ) {
                   config_variable = NA,
                   AIC = AIC(m),
                   beta_pd = NA,
+                upper_pd = NA,
+                lower_pd = NA,
                   p_value_pd = NA)
   
   saveRDS(m, paste0("./results/models/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_null.rds"))
@@ -181,6 +183,8 @@ for (i in c("log_HFI", "log_HMI", "log_bd") ) {
                     config_variable = "log_pd",
                     AIC = AIC(m),
                     beta_pd = (summary(m))$tTable["log_pd", "Value"],
+                    upper_pd = intervals(m, which = "fixed")$fixed["log_pd","upper"],
+                    lower_pd = intervals(m, which = "fixed")$fixed["log_pd","lower"],
                     p_value_pd = (summary(m))$tTable["log_pd", "p-value"])
     
     saveRDS(m, paste0("./results/models/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_",i, "_w_pd.rds"))
@@ -203,6 +207,8 @@ for (i in c("log_HFI", "log_HMI", "log_bd") ) {
                    config_variable = "log_dist_2_build",
                    AIC = AIC(m),
                    beta_pd = NA,
+                   upper_pd = NA,
+                   lower_pd = NA,
                    p_value_pd = NA)
     saveRDS(m, paste0("./results/models/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_w_dist2build.rds"))
     
@@ -221,6 +227,8 @@ for (i in c("log_HFI", "log_HMI", "log_bd") ) {
                    config_variable = "log_pd",
                    AIC = AIC(m),
                    beta_pd = (summary(m))$tTable["log_pd", "Value"],
+                   upper_pd = intervals(m, which = "fixed")$fixed["log_pd","upper"],
+                   lower_pd = intervals(m, which = "fixed")$fixed["log_pd","lower"],
                    p_value_pd = (summary(m))$tTable["log_pd", "p-value"])
     saveRDS(m, paste0("./results/models/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_w_pd.rds"))
     
@@ -239,6 +247,8 @@ for (i in c("log_HFI", "log_HMI", "log_bd") ) {
                    config_variable = "log_dist_2_build + log_pd",
                    AIC = AIC(m),
                    beta_pd = (summary(m))$tTable["log_pd", "Value"],
+                   upper_pd = intervals(m, which = "fixed")$fixed["log_pd","upper"],
+                   lower_pd = intervals(m, which = "fixed")$fixed["log_pd","lower"],
                    p_value_pd = (summary(m))$tTable["log_pd", "p-value"])
     saveRDS(m, paste0("./results/models/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_w_dist2build_and_pd.rds"))
     
@@ -246,5 +256,5 @@ for (i in c("log_HFI", "log_HMI", "log_bd") ) {
   }
 }
 
-write_csv(results, paste0("./results/ModResults_move",target_time_scale_days, "d_",tartget_spatial_scale, "outlier_deleted.csv"))
+write_csv(results, paste0("./results/ModResults_allSpp/ModResults_move",target_time_scale_days, "d_",tartget_spatial_scale, ".csv"))
 
