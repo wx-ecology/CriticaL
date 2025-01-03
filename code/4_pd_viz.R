@@ -68,16 +68,16 @@ if (tartget_spatial_scale == "hi") {
 }
 
   
-# raw mule deer movement 
+# raw animal movement 
 # raw_move <- readRDS("./data/movement/Tucker_7704108/Tucker_1h_Move_Spatial.rds")  
 # raw_move <- read_csv("./data/movement/other_open_data/Morato_2018_Jaguar/jaguar_movement_data.csv") %>%
 #   rename(ID = `individual.local.identifier (ID)`, Longitude = location.long, Latitude = location.lat, 
 #          Species = individual.taxon.canonical.name, TimestampUTC = timestamp) %>%
 #   mutate(TimestampUTC = mdy_hm(TimestampUTC), ID = paste0(str_sub(study.name, 1,2), ID, "_", Species))
-raw_move <- read_csv("./data/movement/open_movebank/midproduct_raw_movebank_data.csv") %>%
-  rename( TimestampUTC = timestamp, Longitude = coords_x, Latitude = coords_y) %>%
-  mutate( individual_id = as.character(individual_id),
-          ID = paste0(str_sub(individual_id, -4,-1), "_", species) )
+# raw_move <- read_csv("./data/movement/open_movebank/midproduct_raw_movebank_data.csv") %>%
+#   rename( TimestampUTC = timestamp, Longitude = coords_x, Latitude = coords_y) %>%
+#   mutate( individual_id = as.character(individual_id),
+#           ID = paste0(str_sub(individual_id, -4,-1), "_", species) )
 
 # we want to visualize animals experience different percolation distances under the same building density 
 move.summary <- move %>%
@@ -99,7 +99,7 @@ raw <- raw_move %>% filter(ID %in% ID.list)
 # Load the World Settlement Footprint dataset
 wsf <- ee$Image('DLR/WSF/WSF2015/v1')
 
-for (id in ID.list[18:length(ID.list)]) {
+for (id in ID.list[1:length(ID.list)]) {
   
   id = as.character(id)
   
@@ -151,40 +151,40 @@ for (id in ID.list[18:length(ID.list)]) {
     midpoint_projected <- st_transform(midpoint, crs = EPSG)
     buffer_pd_scale <- st_buffer(midpoint_projected, dist = disp.id.i$pd_scale*1000)
    
-    # Clip the dataset to the polygon
-    polygon_ee <- sf_as_ee(buffer_pd_scale)
-    clipped_wsf <- wsf$clip(polygon_ee)
-    # Download the clipped image as a GeoTIFF
-    clipped_wsf_tif <- ee_as_rast(
-      image = clipped_wsf,
-      region = polygon_ee$geometry(),
-      scale = 250,  # Set resolution (in meters)
-      via = "drive"  # Export via Google Drive
-    ) 
-    clipped_wsf_tif <- ifel(clipped_wsf_tif == 255, 1, 0)
-    writeRaster(clipped_wsf_tif, filename = paste0("./visualization/", disp.id.i$Binomial, "/", id, 
-                                              "_bd", round(disp.id.i$bd_adpt,0), 
-                                              "_pd",disp.id.i$pd_scale,"km_", disp.id.i$pd_adpt, "_",i, ".tif"),
-                overwrite=TRUE)
-    
-    # visualization 
-    p <- ggplot() +
-      geom_spatraster(data = clipped_wsf_tif) +
-      scale_fill_gradient(low = NA, high = "red") +
-      geom_sf(data = buffer_pd_scale, color = "grey", fill = NA, linewidth = 1.2) +
-      geom_sf(data = traj.id.i.sp, color = "#404040") +
-      geom_sf(data = disp.id.i.sp, color = "orange", linewidth = 1.5) + 
-      theme_void() +
-      ggtitle(paste0(disp.id.i$ID, " ", target_time_scale_days, "-day", 
-                     "\n building density = ", round(disp.id.i$bd_adpt,1), 
-                     "\n percolation distance = ", disp.id.i$pd_adpt/1000, 
-                     " km (radius = ", disp.id.i$pd_scale, " km)")) +
-      theme(legend.position = "none",
-            plot.title = element_text(size=10)) 
-    
-  ggsave(paste0("./visualization/", disp.id.i$Binomial, "/", id,
-                "_bd", round(disp.id.i$bd_adpt,0), 
-                "_pd",disp.id.i$pd_scale,"km_", disp.id.i$pd_adpt, "_",i, ".png"))
+  #   # Clip the dataset to the polygon
+  #   polygon_ee <- sf_as_ee(buffer_pd_scale)
+  #   clipped_wsf <- wsf$clip(polygon_ee)
+  #   # Download the clipped image as a GeoTIFF
+  #   clipped_wsf_tif <- ee_as_rast(
+  #     image = clipped_wsf,
+  #     region = polygon_ee$geometry(),
+  #     scale = 250,  # Set resolution (in meters)
+  #     via = "drive"  # Export via Google Drive
+  #   ) 
+  #   clipped_wsf_tif <- ifel(clipped_wsf_tif == 255, 1, 0)
+  #   writeRaster(clipped_wsf_tif, filename = paste0("./visualization/", disp.id.i$Binomial, "/", id, 
+  #                                             "_bd", round(disp.id.i$bd_adpt,0), 
+  #                                             "_pd",disp.id.i$pd_scale,"km_", disp.id.i$pd_adpt, "_",i, ".tif"),
+  #               overwrite=TRUE)
+  #   
+  #   # visualization 
+  #   p <- ggplot() +
+  #     geom_spatraster(data = clipped_wsf_tif) +
+  #     scale_fill_gradient(low = NA, high = "red") +
+  #     geom_sf(data = buffer_pd_scale, color = "grey", fill = NA, linewidth = 1.2) +
+  #     geom_sf(data = traj.id.i.sp, color = "#404040") +
+  #     geom_sf(data = disp.id.i.sp, color = "orange", linewidth = 1.5) + 
+  #     theme_void() +
+  #     ggtitle(paste0(disp.id.i$ID, " ", target_time_scale_days, "-day", 
+  #                    "\n building density = ", round(disp.id.i$bd_adpt,1), 
+  #                    "\n percolation distance = ", disp.id.i$pd_adpt/1000, 
+  #                    " km (radius = ", disp.id.i$pd_scale, " km)")) +
+  #     theme(legend.position = "none",
+  #           plot.title = element_text(size=10)) 
+  #   
+  # ggsave(paste0("./visualization/", disp.id.i$Binomial, "/", id,
+  #               "_bd", round(disp.id.i$bd_adpt,0), 
+  #               "_pd",disp.id.i$pd_scale,"km_", disp.id.i$pd_adpt, "_",i, ".png"))
     
   st_write(buffer_pd_scale, paste0("./visualization/", disp.id.i$Binomial, "/", id,"_buffer_", i, ".shp"))
   st_write(traj.id.i.sp, paste0("./visualization/", disp.id.i$Binomial, "/", id,"_traj_", i, ".shp"))

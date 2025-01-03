@@ -15,7 +15,7 @@ ee_check()
 #setwd("/Users/wenjing/Senckenberg Dropbox/Wenjing Xu/CriticaL/")
 
 target_time_scale_days = 1
-target_set = "oodata" # "covid", "movebank", "oodata" 
+target_set = "covid" # "covid", "movebank", "oodata" 
 
 move = read_rds(paste0(
   "./data/movement/midproduct/",
@@ -325,7 +325,8 @@ if (target_set == "covid") {
                                                   .default = BodyMass_kg))
 }
 
-
+# check again
+unique(move %>% filter(is.na(Diet)) %>% pull(Binomial) )
 
 ###### step 6: final data organization  -----------------   
 move <- move %>%                    
