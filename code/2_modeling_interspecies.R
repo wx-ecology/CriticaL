@@ -16,8 +16,8 @@ get_clean_dat <- function (m, threshold) {
 ###################################################
 # ----- read data and prep data for modeling ------ 
 ###################################################
-target_time_scale_days = 10
-tartget_spatial_scale = "hi" 
+target_time_scale_days = 1
+tartget_spatial_scale = "me" 
 
 move_covid <- read_rds( paste0("./data/movement/ready_data/move", target_time_scale_days,"d_covid.rds"))
 move_movebank <- read_rds(paste0("./data/movement/ready_data/move", target_time_scale_days,"d_movebank.rds"))
@@ -153,7 +153,7 @@ for (i in c("log_HFI", "log_HMI", "log_bd") ) {
                   beta_pd = NA,
                   p_value_pd = NA)
   
-  saveRDS(m, paste0("./results/models/allspp_", i, "_null.rds"))
+  saveRDS(m, paste0("./results/models/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_null.rds"))
   results = rbind(results, sum)
   
   # plus pd 
@@ -183,7 +183,7 @@ for (i in c("log_HFI", "log_HMI", "log_bd") ) {
                     beta_pd = (summary(m))$tTable["log_pd", "Value"],
                     p_value_pd = (summary(m))$tTable["log_pd", "p-value"])
     
-    saveRDS(m, paste0("./results/models/allspp_", i, "_w_pd.rds"))
+    saveRDS(m, paste0("./results/models/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_",i, "_w_pd.rds"))
     results = rbind(results, sum)
     
   } else {
@@ -204,7 +204,7 @@ for (i in c("log_HFI", "log_HMI", "log_bd") ) {
                    AIC = AIC(m),
                    beta_pd = NA,
                    p_value_pd = NA)
-    saveRDS(m, paste0("./results/models/allspp_", i, "_w_dist2build.rds"))
+    saveRDS(m, paste0("./results/models/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_w_dist2build.rds"))
     
     print (paste0("calculating for ", i, " pd model..."))
     formula <- as.formula(paste0("log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + ", 
@@ -222,7 +222,7 @@ for (i in c("log_HFI", "log_HMI", "log_bd") ) {
                    AIC = AIC(m),
                    beta_pd = (summary(m))$tTable["log_pd", "Value"],
                    p_value_pd = (summary(m))$tTable["log_pd", "p-value"])
-    saveRDS(m, paste0("./results/models/allspp_", i, "_w_pd.rds"))
+    saveRDS(m, paste0("./results/models/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_w_pd.rds"))
     
     print (paste0("calculating for ", i, " dist2build + pd  model..."))
     formula <- as.formula(paste0("log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + ", 
@@ -240,7 +240,7 @@ for (i in c("log_HFI", "log_HMI", "log_bd") ) {
                    AIC = AIC(m),
                    beta_pd = (summary(m))$tTable["log_pd", "Value"],
                    p_value_pd = (summary(m))$tTable["log_pd", "p-value"])
-    saveRDS(m, paste0("./results/models/allspp_", i, "_w_dist2build_and_pd.rds"))
+    saveRDS(m, paste0("./results/models/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_w_dist2build_and_pd.rds"))
     
     results = rbind(results, sum.1, sum.2, sum.3)
   }
