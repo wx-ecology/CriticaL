@@ -7,16 +7,16 @@ library(nlme)
 library(ggplot2)
 #library(MuMIn)
 
-# function to identify outliers based on standardized residuals
-get_clean_dat <- function (m, threshold) {
-  dat$std_resid <- residuals(m, type = "normalized")
-  dat_clean <- dat[abs(dat$std_resid) <= threshold, ]
-}
+# # function to identify outliers based on standardized residuals
+# get_clean_dat <- function (m, threshold) {
+#   dat$std_resid <- residuals(m, type = "normalized")
+#   dat_clean <- dat[abs(dat$std_resid) <= threshold, ]
+# }
 
 ###################################################
 # ----- read data and prep data for modeling ------ 
 ###################################################
-target_time_scale_days = 1
+target_time_scale_days = 10
 tartget_spatial_scale = "hi" 
 
 move_covid <- read_rds( paste0("./data/movement/ready_data/move", target_time_scale_days,"d_covid.rds"))
@@ -104,10 +104,10 @@ length(unique(move.sum$Binomial)) # 39 -- > 26 spp for 10 d, 19 for 1d
 nrow(move.sum) # 2044 for 10 day or 625 for 1day
 
 # ggpairs(move.sum, columns = c(2:8))
-# transformation for modeling 
+# transformation for modeling. scale and log so the estimates are at comparative scale.
 move.sum <- move.sum %>%
   mutate(log_BodyMass_kg = log(BodyMass_kg), 
-         scale_NDVI = scale(NDVI),
+         scale_NDVI = as.vector(scale(NDVI)),
          log_HFI = ifelse(HFI==0, log(HFI+0.001), log(HFI)),
          log_HMI = ifelse(HMI==0, log(HMI+0.001), log(HMI)),
          log_dist_2_build = log(dist_2_build),
@@ -116,6 +116,8 @@ move.sum <- move.sum %>%
          log_Displacement_km = log(Displacement_km)) %>%
   rename(lon = Longitude,
          lat = Latitude)
+
+GGally::ggpairs(move.sum, columns = 19:26)
 
 colSums(is.na(move.sum))
 sapply(move.sum, function(col) sum(is.nan(col)))
