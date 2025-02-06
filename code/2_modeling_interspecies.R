@@ -17,7 +17,7 @@ library(ggplot2)
 # ----- read data and prep data for modeling ------ 
 ###################################################
 target_time_scale_days = 10
-tartget_spatial_scale = "hi" 
+tartget_spatial_scale = "me" 
 
 move_covid <- read_rds( paste0("./data/movement/ready_data/move", target_time_scale_days,"d_covid.rds"))
 move_movebank <- read_rds(paste0("./data/movement/ready_data/move", target_time_scale_days,"d_movebank.rds"))
@@ -108,16 +108,18 @@ nrow(move.sum) # 2044 for 10 day or 625 for 1day
 move.sum <- move.sum %>%
   mutate(log_BodyMass_kg = log(BodyMass_kg), 
          scale_NDVI = as.vector(scale(NDVI)),
-         log_HFI = ifelse(HFI==0, log(HFI+0.001), log(HFI)),
-         log_HMI = ifelse(HMI==0, log(HMI+0.001), log(HMI)),
+         # log_HFI = ifelse(HFI==0, log(HFI+0.001), log(HFI)),
+         # log_HMI = ifelse(HMI==0, log(HMI+0.001), log(HMI)),
+         scale_HFI = scale(HFI),
+         scale_HMI = scale(HMI),
          log_dist_2_build = log(dist_2_build),
-         log_pd = log(pd_adpt_km),
-         log_bd = ifelse(bd_adpt==0, log(bd_adpt+0.001), log(bd_adpt)),
+         log_pd = scale(log(pd_adpt_km)), # very similar scaled or not 
+         slog_bd = scale(ifelse(bd_adpt==0, log(bd_adpt+0.001), log(bd_adpt))),
          log_Displacement_km = log(Displacement_km)) %>%
   rename(lon = Longitude,
          lat = Latitude)
 
-GGally::ggpairs(move.sum, columns = 19:26)
+# GGally::ggpairs(move.sum, columns = 19:26)
 
 colSums(is.na(move.sum))
 sapply(move.sum, function(col) sum(is.nan(col)))
@@ -135,7 +137,9 @@ target_time_scale_days
 tartget_spatial_scale 
 
 results = tibble()
-for (i in c("log_HFI", "log_HMI", "log_bd") ) {
+for (i in c("scale_HFI", "scale_HMI", "slog_bd"
+  # "log_HFI", "log_HMI",  "log_bd"
+  ) ) {
   
   # null model for HFI and HMI 
   formula <- as.formula(paste0("log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + ", i))
@@ -157,11 +161,11 @@ for (i in c("log_HFI", "log_HMI", "log_bd") ) {
                 lower_pd = NA,
                   p_value_pd = NA)
   
-  saveRDS(m, paste0("./results/models/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_null.rds"))
+  saveRDS(m, paste0("./results/models/zscored/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_null.rds"))
   results = rbind(results, sum)
   
   # plus pd 
-  if (i != "log_bd") {
+  if (i != "slog_bd") {
 
     formula <- as.formula(paste0("log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + ", 
                                  i, " + log_pd"))
@@ -189,7 +193,7 @@ for (i in c("log_HFI", "log_HMI", "log_bd") ) {
                     lower_pd = intervals(m, which = "fixed")$fixed["log_pd","lower"],
                     p_value_pd = (summary(m))$tTable["log_pd", "p-value"])
     
-    saveRDS(m, paste0("./results/models/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_",i, "_w_pd.rds"))
+    saveRDS(m, paste0("./results/models/zscored/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_",i, "_w_pd.rds"))
     results = rbind(results, sum)
     
   } else {
@@ -212,7 +216,7 @@ for (i in c("log_HFI", "log_HMI", "log_bd") ) {
                    upper_pd = NA,
                    lower_pd = NA,
                    p_value_pd = NA)
-    saveRDS(m, paste0("./results/models/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_w_dist2build.rds"))
+    saveRDS(m, paste0("./results/models/zscored/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_w_dist2build.rds"))
     
     print (paste0("calculating for ", i, " pd model..."))
     formula <- as.formula(paste0("log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + ", 
@@ -232,7 +236,7 @@ for (i in c("log_HFI", "log_HMI", "log_bd") ) {
                    upper_pd = intervals(m, which = "fixed")$fixed["log_pd","upper"],
                    lower_pd = intervals(m, which = "fixed")$fixed["log_pd","lower"],
                    p_value_pd = (summary(m))$tTable["log_pd", "p-value"])
-    saveRDS(m, paste0("./results/models/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_w_pd.rds"))
+    saveRDS(m, paste0("./results/models/zscored/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_w_pd.rds"))
     
     print (paste0("calculating for ", i, " dist2build + pd  model..."))
     formula <- as.formula(paste0("log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + ", 
@@ -252,11 +256,11 @@ for (i in c("log_HFI", "log_HMI", "log_bd") ) {
                    upper_pd = intervals(m, which = "fixed")$fixed["log_pd","upper"],
                    lower_pd = intervals(m, which = "fixed")$fixed["log_pd","lower"],
                    p_value_pd = (summary(m))$tTable["log_pd", "p-value"])
-    saveRDS(m, paste0("./results/models/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_w_dist2build_and_pd.rds"))
+    saveRDS(m, paste0("./results/models/zscored/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_w_dist2build_and_pd.rds"))
     
     results = rbind(results, sum.1, sum.2, sum.3)
   }
 }
 
-write_csv(results, paste0("./results/ModResults_allSpp/ModResults_move",target_time_scale_days, "d_",tartget_spatial_scale, ".csv"))
+write_csv(results, paste0("./results/ModResults_allSpp/scale_zscored/ModResults_move",target_time_scale_days, "d_",tartget_spatial_scale, ".csv"))
 
