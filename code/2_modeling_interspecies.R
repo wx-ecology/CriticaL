@@ -1,17 +1,13 @@
 # this script runs models at the interspecies level 
+# update Feb 17 -> update the spatial autocorrelation structure
+# and also extract individual marginal R2 
 
 library(tidyverse)
 library(AICcmodavg)
 source("./code/HaversineLMEfunctions.R")
 library(nlme)
 library(ggplot2)
-#library(MuMIn)
-
-# # function to identify outliers based on standardized residuals
-# get_clean_dat <- function (m, threshold) {
-#   dat$std_resid <- residuals(m, type = "normalized")
-#   dat_clean <- dat[abs(dat$std_resid) <= threshold, ]
-# }
+library(glmm.hp)
 
 ###################################################
 # ----- read data and prep data for modeling ------ 
@@ -99,7 +95,7 @@ if (any(duplicated(c(move.sum$Longitude, move.sum$Latitude)))) {
 table(move.sum$Binomial)
 move.sum <- move.sum %>% filter(Binomial %in% (move.sum %>% group_by(Binomial) %>% 
                                                  summarize (n = length(unique(ID))) %>% 
-                                                 filter(n >= 3) %>% pull(Binomial))) 
+                                                 filter(n >= 5) %>% pull(Binomial))) 
 length(unique(move.sum$Binomial)) # 39 -- > 26 spp for 10 d, 19 for 1d
 nrow(move.sum) # 2044 for 10 day or 625 for 1day
 
@@ -108,8 +104,6 @@ nrow(move.sum) # 2044 for 10 day or 625 for 1day
 move.sum <- move.sum %>%
   mutate(log_BodyMass_kg = log(BodyMass_kg), 
          scale_NDVI = as.vector(scale(NDVI)),
-         # log_HFI = ifelse(HFI==0, log(HFI+0.001), log(HFI)),
-         # log_HMI = ifelse(HMI==0, log(HMI+0.001), log(HMI)),
          scale_HFI = scale(HFI),
          scale_HMI = scale(HMI),
          log_dist_2_build = log(dist_2_build),
@@ -136,21 +130,22 @@ dat <- dat[!apply(dat, 1, function(row) any(is.nan(row))), ]
 target_time_scale_days
 tartget_spatial_scale 
 
+models = tibble()
 results = tibble()
-for (i in c("scale_HFI", "scale_HMI", "slog_bd"
-  # "log_HFI", "log_HMI",  "log_bd"
-  ) ) {
+mR2 = tibble()
+for (i in c("scale_HFI", "scale_HMI", "slog_bd") ) {
   
-  # null model for HFI and HMI 
-  formula <- as.formula(paste0("log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + ", i))
-  
+  # ------------------------- HFI -----------------------------------------------------
+  if(i == "scale_HFI") {
+   
+  # null model  
   print (paste0("calculating for ", i, " null model..."))
-  m = lme(formula,
-            correlation = corHaversine(form=~lon+lat, mimic = "corGaus"),
-            random= ~1|Order/Family/Genus/Species,
-            control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
-            data = dat)
-  
+  m = lme(log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + scale_HFI,
+          correlation = corSpatial(form=~lon+lat, type = "exponential"),
+          random= ~1|Order/Family/Genus/Species,
+          control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
+          data = dat)
+
   sum =  tibble(temporal_scale = paste0(target_time_scale_days, "d"),
                   spatial_scale = paste0("disp_", tartget_spatial_scale),
                   amount_variable = i,
@@ -161,106 +156,231 @@ for (i in c("scale_HFI", "scale_HMI", "slog_bd"
                 lower_pd = NA,
                   p_value_pd = NA)
   
-  saveRDS(m, paste0("./results/models/zscored/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_null.rds"))
+  models <- rbind(models, tibble_row(comp_var = i, conf_var = NA, model = m, mR2 = NA))
   results = rbind(results, sum)
   
-  # plus pd 
-  if (i != "slog_bd") {
-
-    formula <- as.formula(paste0("log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + ", 
-                                 i, " + log_pd"))
+  # model plus pd 
+  print (paste0("calculating ", i, " pd model..."))
+  
+  m = lme(log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + scale_HFI + log_pd,
+          correlation = corSpatial(form=~lon+lat, type = "exponential"),
+          random= ~1|Order/Family/Genus/Species,
+          control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
+          data = dat)
+  
+  print (paste0("calculating mR2 for the ", i, " pd model..."))
+  mR2.i <- glmm.hp(m)
+  models <- rbind(models, tibble_row(comp_var = i, conf_var = "log_pd", model = m, mR2 = mR2.i ))
+  
+  sum =  tibble(temporal_scale = paste0(target_time_scale_days, "d"),
+                spatial_scale = paste0("disp_", tartget_spatial_scale),
+                amount_variable = i,
+                config_variable = "log_pd",
+                AIC = AIC(m),
+                beta_pd = (summary(m))$tTable["log_pd", "Value"],
+                upper_pd = intervals(m, which = "fixed")$fixed["log_pd","upper"],
+                lower_pd = intervals(m, which = "fixed")$fixed["log_pd","lower"],
+                p_value_pd = (summary(m))$tTable["log_pd", "p-value"])
+  
+  # summarizing results 
+  mR2.i <- mR2.i$hierarchical.partitioning 
+  mR2 <- rbind(mR2,
+               tibble (comp_var = i, conf_var = "log_pd", fixed_effect = rownames(mR2.i), 
+                       Unique = mR2.i[, "Unique"], Individual = mR2.i[, "Individual"], 
+                       I.perc = mR2.i[, "I.perc(%)"] ))
+  results = rbind(results, sum) 
+  
+  # saveRDS(models, paste0("./results/models/zscored/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_",i, "_w_pd_mR2.rds"))
+  }
+  
+  # ------------------------- HMI -----------------------------------------------------
+  if(i == "scale_HMI") {
     
-    print (paste0("calculating for ", i, " pd model..."))
-    m = lme(formula,
-              correlation = corHaversine(form=~lon+lat, mimic = "corGaus"),
-              random= ~1|Order/Family/Genus/Species,
-              control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
-              data = dat)
-    # dat_clean <- get_clean_dat(m,3)
-    # m = lme(formula,
-    #         correlation = corHaversine(form=~lon+lat, mimic = "corGaus"),
-    #         random= ~1|Order/Family/Genus/Species,
-    #         control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
-    #         data = dat_clean)
+    # null model  
+    print (paste0("calculating ", i, " null model..."))
+    m = lme(log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + scale_HMI,
+            correlation = corSpatial(form=~lon+lat, type = "exponential"),
+            random= ~1|Order/Family/Genus/Species,
+            control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
+            data = dat)
     
     sum =  tibble(temporal_scale = paste0(target_time_scale_days, "d"),
-                    spatial_scale = paste0("disp_", tartget_spatial_scale),
-                    amount_variable = i,
-                    config_variable = "log_pd",
-                    AIC = AIC(m),
-                    beta_pd = (summary(m))$tTable["log_pd", "Value"],
-                    upper_pd = intervals(m, which = "fixed")$fixed["log_pd","upper"],
-                    lower_pd = intervals(m, which = "fixed")$fixed["log_pd","lower"],
-                    p_value_pd = (summary(m))$tTable["log_pd", "p-value"])
+                  spatial_scale = paste0("disp_", tartget_spatial_scale),
+                  amount_variable = i,
+                  config_variable = NA,
+                  AIC = AIC(m),
+                  beta_pd = NA,
+                  upper_pd = NA,
+                  lower_pd = NA,
+                  p_value_pd = NA)
     
-    saveRDS(m, paste0("./results/models/zscored/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_",i, "_w_pd.rds"))
+    models <- rbind(models, tibble_row(comp_var = i, conf_var = NA, model = m, mR2 = NA))
     results = rbind(results, sum)
     
-  } else {
+    # model plus pd 
+    print (paste0("calculating ", i, " pd model..."))
     
-    print (paste0("calculating for ", i, " dist2build model..."))
-    formula <- as.formula(paste0("log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + ", 
-                                 i, "+ log_dist_2_build"))
-    m <- lme(formula,
-                   correlation = corHaversine(form=~lon+lat, mimic = "corGaus"),
-                   random= ~1|Order/Family/Genus/Species,
-                   control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
-                   data = dat)
+    m = lme(log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + scale_HMI + log_pd,
+            correlation = corSpatial(form=~lon+lat, type = "exponential"),
+            random= ~1|Order/Family/Genus/Species,
+            control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
+            data = dat)
     
-    sum.1 = tibble(temporal_scale = paste0(target_time_scale_days, "d"),
-                   spatial_scale = paste0("disp_", tartget_spatial_scale),
-                   amount_variable = i,
-                   config_variable = "log_dist_2_build",
-                   AIC = AIC(m),
-                   beta_pd = NA,
-                   upper_pd = NA,
-                   lower_pd = NA,
-                   p_value_pd = NA)
-    saveRDS(m, paste0("./results/models/zscored/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_w_dist2build.rds"))
+    print (paste0("calculating mR2 for the ", i, " pd model..."))
+    mR2.i <- glmm.hp(m)
+    models <- rbind(models, tibble_row(comp_var = i, conf_var = "log_pd", model = m, mR2 = mR2.i ))
     
-    print (paste0("calculating for ", i, " pd model..."))
-    formula <- as.formula(paste0("log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + ", 
-                                   i, "+ log_pd"))
-    m <- lme(formula,
-               correlation = corHaversine(form=~lon+lat, mimic = "corGaus"),
-               random= ~1|Order/Family/Genus/Species,
-               control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
-               data = dat)
+    sum =  tibble(temporal_scale = paste0(target_time_scale_days, "d"),
+                  spatial_scale = paste0("disp_", tartget_spatial_scale),
+                  amount_variable = i,
+                  config_variable = "log_pd",
+                  AIC = AIC(m),
+                  beta_pd = (summary(m))$tTable["log_pd", "Value"],
+                  upper_pd = intervals(m, which = "fixed")$fixed["log_pd","upper"],
+                  lower_pd = intervals(m, which = "fixed")$fixed["log_pd","lower"],
+                  p_value_pd = (summary(m))$tTable["log_pd", "p-value"])
     
-    sum.2 = tibble(temporal_scale = paste0(target_time_scale_days, "d"),
-                   spatial_scale = paste0("disp_", tartget_spatial_scale),
-                   amount_variable = i,
-                   config_variable = "log_pd",
-                   AIC = AIC(m),
-                   beta_pd = (summary(m))$tTable["log_pd", "Value"],
-                   upper_pd = intervals(m, which = "fixed")$fixed["log_pd","upper"],
-                   lower_pd = intervals(m, which = "fixed")$fixed["log_pd","lower"],
-                   p_value_pd = (summary(m))$tTable["log_pd", "p-value"])
-    saveRDS(m, paste0("./results/models/zscored/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_w_pd.rds"))
+    # summarizing results 
+    mR2.i <- mR2.i$hierarchical.partitioning 
+    mR2 <- rbind(mR2,
+                 tibble (comp_var = i, conf_var = "log_pd", fixed_effect = rownames(mR2.i), 
+                         Unique = mR2.i[, "Unique"], Individual = mR2.i[, "Individual"], 
+                         I.perc = mR2.i[, "I.perc(%)"] ))
+    results = rbind(results, sum) 
     
-    print (paste0("calculating for ", i, " dist2build + pd  model..."))
-    formula <- as.formula(paste0("log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + ", 
-                                 i, "+ log_dist_2_build + log_pd"))
-    m <- lme(formula,
-                  correlation = corHaversine(form=~lon+lat, mimic = "corGaus"),
-                  random= ~1|Order/Family/Genus/Species,
-                  control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
-                  data = dat)
+    # saveRDS(models, paste0("./results/models/zscored/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_",i, "_w_pd_mR2.rds"))
+  }
+
+  # ------------------------- building density -----------------------------------------------------
+  if (i == "slog_bd") {
     
-    sum.3 = tibble(temporal_scale = paste0(target_time_scale_days, "d"),
-                   spatial_scale = paste0("disp_", tartget_spatial_scale),
-                   amount_variable = i,
-                   config_variable = "log_dist_2_build + log_pd",
-                   AIC = AIC(m),
-                   beta_pd = (summary(m))$tTable["log_pd", "Value"],
-                   upper_pd = intervals(m, which = "fixed")$fixed["log_pd","upper"],
-                   lower_pd = intervals(m, which = "fixed")$fixed["log_pd","lower"],
-                   p_value_pd = (summary(m))$tTable["log_pd", "p-value"])
-    saveRDS(m, paste0("./results/models/zscored/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_", i, "_w_dist2build_and_pd.rds"))
+    # null model  
+    print (paste0("calculating ", i, " null model..."))
+    m = lme(log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + slog_bd,
+            correlation = corSpatial(form=~lon+lat, type = "exponential"),
+            random= ~1|Order/Family/Genus/Species,
+            control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
+            data = dat)
     
-    results = rbind(results, sum.1, sum.2, sum.3)
+    sum =  tibble(temporal_scale = paste0(target_time_scale_days, "d"),
+                  spatial_scale = paste0("disp_", tartget_spatial_scale),
+                  amount_variable = i,
+                  config_variable = NA,
+                  AIC = AIC(m),
+                  beta_pd = NA,
+                  upper_pd = NA,
+                  lower_pd = NA,
+                  p_value_pd = NA)
+    
+    models <- rbind(models, tibble_row(comp_var = i, conf_var = NA, model = m, mR2 = NA))
+    results = rbind(results, sum)
+    
+    # model plus distance 2 building
+    print (paste0("calculating ", i, " dist2build model..."))
+    
+    m = lme(log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + slog_bd + log_dist_2_build,
+            correlation = corSpatial(form=~lon+lat, type = "exponential"),
+            random= ~1|Order/Family/Genus/Species,
+            control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
+            data = dat)
+    
+    print (paste0("calculating mR2 for the ", i, " dist2build model..."))
+    mR2.i <- glmm.hp(m)
+    
+    models <- rbind(models, tibble_row(comp_var = i, conf_var = "log_dist_2_build", model = m, mR2 = mR2.i ))
+    
+    sum = tibble(temporal_scale = paste0(target_time_scale_days, "d"),
+                 spatial_scale = paste0("disp_", tartget_spatial_scale),
+                 amount_variable = i,
+                 config_variable = "log_dist_2_build",
+                 AIC = AIC(m),
+                 beta_pd = NA,
+                 upper_pd = NA,
+                 lower_pd = NA,
+                 p_value_pd = NA)
+    
+    mR2.i <- mR2.i$hierarchical.partitioning 
+    mR2 <- rbind(mR2,
+                 tibble (comp_var = i, conf_var = "log_dist_2_build", fixed_effect = rownames(mR2.i), 
+                         Unique = mR2.i[, "Unique"], Individual = mR2.i[, "Individual"], 
+                         I.perc = mR2.i[, "I.perc(%)"] ))
+    # mR2 <- rbind(mR2,
+    #              tibble (comp_var = i, conf_var = "log_dist_2_build", fixed_effect = names(fixed.effects(m))[2:length(names(fixed.effects(m)))], 
+    #                      Unique = NA, Individual = NA, 
+    #                      I.perc = NA ))
+    results = rbind(results, sum) 
+    
+    # model plus log_pd
+    print (paste0("calculating ", i, " log_pd model..."))
+    
+    m = lme(log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + slog_bd + log_pd,
+            correlation = corSpatial(form=~lon+lat, type = "exponential"),
+            random= ~1|Order/Family/Genus/Species,
+            control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
+            data = dat)
+    
+    print (paste0("calculating mR2 for the ", i, " log_pd model..."))
+    mR2.i <- glmm.hp(m)
+    
+    models <- rbind(models, tibble_row(comp_var = i, conf_var = "log_pd", model = m, mR2 = mR2.i ))
+    
+    sum = tibble(temporal_scale = paste0(target_time_scale_days, "d"),
+                 spatial_scale = paste0("disp_", tartget_spatial_scale),
+                 amount_variable = i,
+                 config_variable = "log_pd",
+                 AIC = AIC(m),
+                 beta_pd = (summary(m))$tTable["log_pd", "Value"],
+                 upper_pd = intervals(m, which = "fixed")$fixed["log_pd","upper"],
+                 lower_pd = intervals(m, which = "fixed")$fixed["log_pd","lower"],
+                 p_value_pd = (summary(m))$tTable["log_pd", "p-value"])
+    
+    mR2.i <- mR2.i$hierarchical.partitioning 
+    mR2 <- rbind(mR2,
+                 tibble (comp_var = i, conf_var = "log_pd", fixed_effect = rownames(mR2.i), 
+                         Unique = mR2.i[, "Unique"], Individual = mR2.i[, "Individual"], 
+                         I.perc = mR2.i[, "I.perc(%)"] ))
+    results = rbind(results, sum) 
+    
+    # model dist2build + log_pd
+    print (paste0("calculating ", i, " dist2build + pd model..."))
+    
+    m = lme(log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + slog_bd + log_dist_2_build + log_pd,
+            correlation = corSpatial(form=~lon+lat, type = "exponential"),
+            random= ~1|Order/Family/Genus/Species,
+            control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
+            data = dat)
+    
+    print (paste0("calculating mR2 for the ", i, " dist2build + pd model..."))
+    mR2.i <- glmm.hp(m)
+    
+    models <- rbind(models, tibble_row(comp_var = i, conf_var = "log_dist_2_build + log_pd", model = m, mR2 = mR2.i ))
+    
+    sum = tibble(temporal_scale = paste0(target_time_scale_days, "d"),
+                 spatial_scale = paste0("disp_", tartget_spatial_scale),
+                 amount_variable = i,
+                 config_variable = "log_dist_2_build + log_pd",
+                 AIC = AIC(m),
+                 beta_pd = (summary(m))$tTable["log_pd", "Value"],
+                 upper_pd = intervals(m, which = "fixed")$fixed["log_pd","upper"],
+                 lower_pd = intervals(m, which = "fixed")$fixed["log_pd","lower"],
+                 p_value_pd = (summary(m))$tTable["log_pd", "p-value"])
+    
+    mR2.i <- mR2.i$hierarchical.partitioning 
+    mR2 <- rbind(mR2,
+                 tibble (comp_var = i, conf_var = "log_dist_2_build + log_pd", fixed_effect = rownames(mR2.i), 
+                         Unique = mR2.i[, "Unique"], Individual = mR2.i[, "Individual"], 
+                         I.perc = mR2.i[, "I.perc(%)"] ))
+    results = rbind(results, sum) 
   }
 }
 
+saveRDS(models, paste0("./results/models/zscored/Mods_allspp_",target_time_scale_days, "d_",tartget_spatial_scale,".rds"))
 write_csv(results, paste0("./results/ModResults_allSpp/scale_zscored/ModResults_move",target_time_scale_days, "d_",tartget_spatial_scale, ".csv"))
+write_csv(mR2, paste0("./results/ModResults_allSpp/scale_zscored/mR2Results_move",target_time_scale_days, "d_",tartget_spatial_scale, ".csv"))
 
+
+# # when mR2 has nan issue
+# mR2 <- rbind(mR2,
+#              tibble (comp_var = i, conf_var = "XXXX", fixed_effect = names(fixed.effects(m))[2:length(names(fixed.effects(m)))], 
+#                      Unique = NA, Individual = NA, 
+#                      I.perc = NA ))
