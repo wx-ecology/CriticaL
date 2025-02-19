@@ -4,7 +4,7 @@
 
 library(tidyverse)
 library(AICcmodavg)
-source("./code/HaversineLMEfunctions.R")
+#source("./code/HaversineLMEfunctions.R")
 library(nlme)
 library(ggplot2)
 library(glmm.hp)
@@ -91,11 +91,11 @@ move.sum <- move %>%
 if (any(duplicated(c(move.sum$Longitude, move.sum$Latitude)))) {
   move.sum <-move.sum[- which(duplicated(c(move.sum$Longitude, move.sum$Latitude))), ]}  
 
-## remove species that have *****less than 3***** individuals  
+## remove species that have *****less than 5***** individuals  
 table(move.sum$Binomial)
 move.sum <- move.sum %>% filter(Binomial %in% (move.sum %>% group_by(Binomial) %>% 
                                                  summarize (n = length(unique(ID))) %>% 
-                                                 filter(n >= 5) %>% pull(Binomial))) 
+                                                 filter(n > 5) %>% pull(Binomial))) 
 length(unique(move.sum$Binomial)) # 39 -- > 26 spp for 10 d, 19 for 1d
 nrow(move.sum) # 2044 for 10 day or 625 for 1day
 
@@ -125,7 +125,10 @@ sapply(move.sum, function(col) sum(is.infinite(col)))
 # remove na 
 dat = move.sum %>% drop_na() 
 dat <- dat[!apply(dat, 1, function(row) any(is.nan(row))), ] 
-# n = 2026 for 10d // 597 for 1d
+dat <- dat %>% filter(Binomial %in% (dat %>% group_by(Binomial) %>% 
+                                      summarize (n = length(unique(ID))) %>% 
+                                      filter(n > 5) %>% pull(Binomial))) 
+# n = 2026 - 2018 for 10d // 597 for 1d
 
 target_time_scale_days
 tartget_spatial_scale 
@@ -165,8 +168,11 @@ for (i in c("scale_HFI", "scale_HMI", "slog_bd") ) {
   m = lme(log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + scale_HFI + log_pd,
           correlation = corSpatial(form=~lon+lat, type = "exponential"),
           random= ~1|Order/Family/Genus/Species,
-          control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
+          control = list(opt = "nlminb", msMaxIter = 1000, msMaxEval = 1000, tolerance = 1e-4, niterEM = 50),
+          method = "ML",
           data = dat)
+  
+  # trying opt = "nlminb" - worked 
   
   print (paste0("calculating mR2 for the ", i, " pd model..."))
   mR2.i <- glmm.hp(m)
@@ -189,9 +195,7 @@ for (i in c("scale_HFI", "scale_HMI", "slog_bd") ) {
                        Unique = mR2.i[, "Unique"], Individual = mR2.i[, "Individual"], 
                        I.perc = mR2.i[, "I.perc(%)"] ))
   results = rbind(results, sum) 
-  
-  # saveRDS(models, paste0("./results/models/zscored/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_",i, "_w_pd_mR2.rds"))
-  }
+   }
   
   # ------------------------- HMI -----------------------------------------------------
   if(i == "scale_HMI") {
@@ -201,7 +205,9 @@ for (i in c("scale_HFI", "scale_HMI", "slog_bd") ) {
     m = lme(log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + scale_HMI,
             correlation = corSpatial(form=~lon+lat, type = "exponential"),
             random= ~1|Order/Family/Genus/Species,
-            control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
+            control = list(opt = "nlminb", msMaxIter = 1000, msMaxEval = 1000, 
+                           tolerance = 1e-4, niterEM = 50), 
+            method = "ML",
             data = dat)
     
     sum =  tibble(temporal_scale = paste0(target_time_scale_days, "d"),
@@ -223,7 +229,9 @@ for (i in c("scale_HFI", "scale_HMI", "slog_bd") ) {
     m = lme(log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + scale_HMI + log_pd,
             correlation = corSpatial(form=~lon+lat, type = "exponential"),
             random= ~1|Order/Family/Genus/Species,
-            control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
+            control = list(opt = "nlminb", msMaxIter = 1000, msMaxEval = 1000, 
+                           tolerance = 1e-4, niterEM = 50), 
+            method = "ML",
             data = dat)
     
     print (paste0("calculating mR2 for the ", i, " pd model..."))
@@ -247,8 +255,6 @@ for (i in c("scale_HFI", "scale_HMI", "slog_bd") ) {
                          Unique = mR2.i[, "Unique"], Individual = mR2.i[, "Individual"], 
                          I.perc = mR2.i[, "I.perc(%)"] ))
     results = rbind(results, sum) 
-    
-    # saveRDS(models, paste0("./results/models/zscored/allspp_",target_time_scale_days, "d_",tartget_spatial_scale, "_",i, "_w_pd_mR2.rds"))
   }
 
   # ------------------------- building density -----------------------------------------------------
@@ -259,7 +265,9 @@ for (i in c("scale_HFI", "scale_HMI", "slog_bd") ) {
     m = lme(log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + slog_bd,
             correlation = corSpatial(form=~lon+lat, type = "exponential"),
             random= ~1|Order/Family/Genus/Species,
-            control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
+            control = list(opt = "nlminb", msMaxIter = 1000, msMaxEval = 1000, 
+                           tolerance = 1e-4, niterEM = 50), 
+            method = "ML",
             data = dat)
     
     sum =  tibble(temporal_scale = paste0(target_time_scale_days, "d"),
@@ -281,7 +289,9 @@ for (i in c("scale_HFI", "scale_HMI", "slog_bd") ) {
     m = lme(log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + slog_bd + log_dist_2_build,
             correlation = corSpatial(form=~lon+lat, type = "exponential"),
             random= ~1|Order/Family/Genus/Species,
-            control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
+            control = list(opt = "nlminb", msMaxIter = 1000, msMaxEval = 1000, 
+                           tolerance = 1e-4, niterEM = 50), 
+            method = "ML",
             data = dat)
     
     print (paste0("calculating mR2 for the ", i, " dist2build model..."))
@@ -304,10 +314,7 @@ for (i in c("scale_HFI", "scale_HMI", "slog_bd") ) {
                  tibble (comp_var = i, conf_var = "log_dist_2_build", fixed_effect = rownames(mR2.i), 
                          Unique = mR2.i[, "Unique"], Individual = mR2.i[, "Individual"], 
                          I.perc = mR2.i[, "I.perc(%)"] ))
-    # mR2 <- rbind(mR2,
-    #              tibble (comp_var = i, conf_var = "log_dist_2_build", fixed_effect = names(fixed.effects(m))[2:length(names(fixed.effects(m)))], 
-    #                      Unique = NA, Individual = NA, 
-    #                      I.perc = NA ))
+    
     results = rbind(results, sum) 
     
     # model plus log_pd
@@ -316,7 +323,9 @@ for (i in c("scale_HFI", "scale_HMI", "slog_bd") ) {
     m = lme(log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + slog_bd + log_pd,
             correlation = corSpatial(form=~lon+lat, type = "exponential"),
             random= ~1|Order/Family/Genus/Species,
-            control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
+            control = list(opt = "nlminb", msMaxIter = 1000, msMaxEval = 1000, 
+                           tolerance = 1e-4, niterEM = 50), 
+            method = "ML",
             data = dat)
     
     print (paste0("calculating mR2 for the ", i, " log_pd model..."))
@@ -347,7 +356,9 @@ for (i in c("scale_HFI", "scale_HMI", "slog_bd") ) {
     m = lme(log_Displacement_km ~ log_BodyMass_kg + scale_NDVI + Diet + slog_bd + log_dist_2_build + log_pd,
             correlation = corSpatial(form=~lon+lat, type = "exponential"),
             random= ~1|Order/Family/Genus/Species,
-            control = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000), method = "ML",
+            control = list(opt = "nlminb", msMaxIter = 1000, msMaxEval = 1000, 
+                           tolerance = 1e-4, niterEM = 50), 
+            method = "ML",
             data = dat)
     
     print (paste0("calculating mR2 for the ", i, " dist2build + pd model..."))
