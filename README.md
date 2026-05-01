@@ -207,4 +207,4 @@ and the Zenodo archive:
 
 For questions about the analysis or reproducibility, contact:
 
-- [Wenjing Xu] — [wenjingxu [at] umass.edu] — [University of Massachusetts Amherst]
+- Wenjing Xu — wenjingxu [at] umass.edu — University of Massachusetts Amherst
