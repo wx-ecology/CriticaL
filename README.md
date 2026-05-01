@@ -47,7 +47,7 @@ manuscript:
 .
 ├── README.md                     This file
 ├── LICENSE                       Code license
-├── code/
+├── code/forGitHub
 │   ├── 00_setup.R                Shared dependencies and helper functions
 │   ├── 01_main_models.R          Main composition vs. configuration models
 │   ├── 02_partitioning_models.R  Behavioral plasticity vs. environmental
