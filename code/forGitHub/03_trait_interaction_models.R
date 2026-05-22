@@ -1,7 +1,7 @@
 # ============================================================================
 # 03_trait_interaction_models.R
 # ----------------------------------------------------------------------------
-# Supplementary analysis: testing whether species traits (body mass and diet)
+# Testing whether species traits (body mass and diet)
 # modulate movement responses to (1) Settlement porosity (configuration) and
 # (2) Human Footprint Index (composition).
 #
@@ -26,13 +26,29 @@
 #   (3) Diet      x HFI       (composition trait interaction)
 #   (4) BodyMass  x HFI       (composition trait interaction)
 #
+# A follow-up herbivore-only model (BodyMass x Porosity) further tests
+# whether body size mediates porosity sensitivity within the herbivore guild
+# (the diet group showing the strongest configuration response). Order is
+# dropped from the random effects since herbivores span fewer taxonomic
+# orders.
+#
+# Diet-specific marginal slopes and pairwise contrasts are extracted from
+# the Diet x Porosity and Diet x HFI models using `emtrends`.
+#
 # Output:
 #   results/models/Mods_trait_interactions_<time>d_<scale>.rds
 #       Tibble of fitted models (4 candidate structures per scale).
+#   results/models/Mods_herbivore_bm_porosity_<time>d_<scale>.rds
+#       Herbivore-only BodyMass x Porosity model per scale.
 #   results/tables/trait_interaction_fixed_effects.csv
+#   results/tables/herbivore_trait_fixed_effects.csv
+#   results/tables/diet_marginal_slopes.csv
+#   results/tables/diet_pairwise_comparisons.csv
 # ============================================================================
 
 source("./code/00_setup.R")
+
+library(emmeans)   # emtrends() for diet-specific slopes
 
 
 # ============================================================================
@@ -47,7 +63,7 @@ prep_trait_interaction_data <- function(dat) {
   dat %>%
     mutate(
       log_BodyMass_kg = log_BodyMass_kg -
-                        median(log_BodyMass_kg, na.rm = TRUE),
+        median(log_BodyMass_kg, na.rm = TRUE),
       Diet            = relevel(factor(Diet), ref = "Herbivore")
     )
 }
@@ -58,43 +74,43 @@ prep_trait_interaction_data <- function(dat) {
 # ============================================================================
 
 fit_trait_models <- function(dat) {
-
+  
   ctrl <- list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000)
   rand <- ~ 1 | Order / Family / Genus / Species
   corr <- corHaversine(form = ~ lon + lat, mimic = "corExp")
-
+  
   message("    fitting Diet x Porosity...")
   m_diet_por <- lme(
     log_Displacement_km ~ log_BodyMass_kg + scale_NDVI +
-                          Diet * pd_adpt_km + HFI,
+      Diet * pd_adpt_km + HFI,
     correlation = corr, random = rand, control = ctrl,
     method = "ML", data = dat
   )
-
+  
   message("    fitting BodyMass x Porosity...")
   m_bm_por <- lme(
     log_Displacement_km ~ log_BodyMass_kg * pd_adpt_km +
-                          scale_NDVI + Diet + HFI,
+      scale_NDVI + Diet + HFI,
     correlation = corr, random = rand, control = ctrl,
     method = "ML", data = dat
   )
-
+  
   message("    fitting Diet x HFI...")
   m_diet_hfi <- lme(
     log_Displacement_km ~ log_BodyMass_kg + scale_NDVI +
-                          Diet * HFI + pd_adpt_km,
+      Diet * HFI + pd_adpt_km,
     correlation = corr, random = rand, control = ctrl,
     method = "ML", data = dat
   )
-
+  
   message("    fitting BodyMass x HFI...")
   m_bm_hfi <- lme(
     log_Displacement_km ~ log_BodyMass_kg * HFI +
-                          scale_NDVI + Diet + pd_adpt_km,
+      scale_NDVI + Diet + pd_adpt_km,
     correlation = corr, random = rand, control = ctrl,
     method = "ML", data = dat
   )
-
+  
   tibble(
     model_label = c("Diet x Porosity", "BodyMass x Porosity",
                     "Diet x HFI",      "BodyMass x HFI"),
@@ -104,42 +120,74 @@ fit_trait_models <- function(dat) {
 
 
 # ============================================================================
-# Run trait-interaction models across all displacement scales
+# Helper: fit herbivore-only BodyMass x Porosity model
+# ----------------------------------------------------------------------------
+# Order is dropped from random effects since herbivores span fewer
+# taxonomic orders.
+# ============================================================================
+
+fit_herbivore_model <- function(dat) {
+  
+  dat_herb <- dat %>% filter(Diet == "Herbivore")
+  
+  lme(
+    log_Displacement_km ~ log_BodyMass_kg * pd_adpt_km +
+      scale_NDVI + HFI,
+    correlation = corHaversine(form = ~ lon + lat, mimic = "corExp"),
+    random      = ~ 1 | Family / Genus / Species,
+    control     = list(opt = "optim", msMaxIter = 1000, msMaxEval = 1000),
+    method      = "ML",
+    data        = dat_herb
+  )
+}
+
+
+# ============================================================================
+# Run trait-interaction and herbivore models across all displacement scales
 # ============================================================================
 
 for (time_scale_days in c(10, 1)) {
   for (spatial_scale in c("hi", "me")) {
-
-    message("\n=== Trait interaction models: ", time_scale_days, "d_", spatial_scale, " ===")
-
+    
+    scale_label <- paste0(time_scale_days, "d_", spatial_scale)
+    message("\n=== Trait interaction models: ", scale_label, " ===")
+    
     dat <- load_and_prep_data(time_scale_days, spatial_scale) %>%
       prep_trait_interaction_data()
-
+    
+    # Four main interaction models
     models <- fit_trait_models(dat)
-
-    out_file <- file.path(
+    write_rds(models, file.path(
       models_out_dir,
-      paste0("Mods_trait_interactions_", time_scale_days, "d_", spatial_scale, ".rds")
-    )
-    write_rds(models, out_file)
-    message("  Saved: ", out_file)
+      paste0("Mods_trait_interactions_", scale_label, ".rds")
+    ))
+    
+    # Herbivore-only follow-up
+    message("    fitting Herbivore-only BodyMass x Porosity...")
+    m_herb <- fit_herbivore_model(dat)
+    write_rds(m_herb, file.path(
+      models_out_dir,
+      paste0("Mods_herbivore_bm_porosity_", scale_label, ".rds")
+    ))
+    
+    message("  Saved models for ", scale_label)
   }
 }
 
 
 # ============================================================================
-# Result extraction: AIC tables and fixed-effect summaries
+# Result extraction: fixed-effect summaries
 # ============================================================================
 
 extract_trait_results <- function(time_scale_days, spatial_scale) {
-
+  
   scale_label <- paste0(time_scale_days, "d_", spatial_scale)
   in_file     <- file.path(
     models_out_dir,
     paste0("Mods_trait_interactions_", scale_label, ".rds")
   )
   models <- read_rds(in_file)
-
+  
   models %>%
     rowwise() %>%
     mutate(
@@ -157,16 +205,115 @@ extract_trait_results <- function(time_scale_days, spatial_scale) {
                   DF, t_value = `t-value`, p_value = `p-value`)
 }
 
-fixef_all <- list()
+extract_herbivore_results <- function(time_scale_days, spatial_scale) {
+  
+  scale_label <- paste0(time_scale_days, "d_", spatial_scale)
+  in_file     <- file.path(
+    models_out_dir,
+    paste0("Mods_herbivore_bm_porosity_", scale_label, ".rds")
+  )
+  m_herb <- read_rds(in_file)
+  
+  as.data.frame(summary(m_herb)$tTable) %>%
+    rownames_to_column("Parameter") %>%
+    mutate(scale = scale_label) %>%
+    dplyr::select(scale, Parameter,
+                  Estimate = Value, SE = Std.Error,
+                  DF, t_value = `t-value`, p_value = `p-value`)
+}
+
+fixef_all      <- list()
+herb_fixef_all <- list()
 
 for (time_scale_days in c(10, 1)) {
   for (spatial_scale in c("hi", "me")) {
     label <- paste0(time_scale_days, "d_", spatial_scale)
-    fixef_all[[label]] <- extract_trait_results(time_scale_days, spatial_scale)
+    fixef_all[[label]]      <- extract_trait_results(time_scale_days, spatial_scale)
+    herb_fixef_all[[label]] <- extract_herbivore_results(time_scale_days, spatial_scale)
   }
 }
 
 write_csv(bind_rows(fixef_all),
           file.path(tables_out_dir, "trait_interaction_fixed_effects.csv"))
+write_csv(bind_rows(herb_fixef_all),
+          file.path(tables_out_dir, "herbivore_trait_fixed_effects.csv"))
 
-message("\nTrait interaction fixed-effect table written to ", tables_out_dir)
+
+# ============================================================================
+# Diet-specific marginal slopes and pairwise contrasts (emtrends)
+# ----------------------------------------------------------------------------
+# Extracts per-diet slopes (and pairwise differences in slope) from the
+# Diet x Porosity and Diet x HFI models. These quantify how strongly each
+# diet group's movement responds to porosity / HFI.
+# ============================================================================
+
+extract_emtrends <- function(mod, predictor, model_label, scale_label) {
+  
+  slopes <- emtrends(mod, ~ Diet, var = predictor) %>%
+    summary(infer = TRUE) %>%
+    as.data.frame() %>%
+    rename(
+      Estimate = !!paste0(predictor, ".trend"),
+      t_value  = t.ratio,
+      p_value  = p.value
+    ) %>%
+    mutate(
+      Predictor = predictor,
+      Model     = model_label,
+      Scale     = scale_label
+    ) %>%
+    dplyr::select(Scale, Model, Predictor, Diet,
+                  Estimate, SE, DF, t_value, p_value)
+  
+  pairs <- emtrends(mod, pairwise ~ Diet, var = predictor)$contrasts %>%
+    summary(infer = TRUE) %>%
+    as.data.frame() %>%
+    rename(
+      Contrast = contrast,
+      Estimate = estimate,
+      t_value  = t.ratio,
+      p_value  = p.value
+    ) %>%
+    mutate(
+      Predictor = predictor,
+      Model     = model_label,
+      Scale     = scale_label
+    ) %>%
+    dplyr::select(Scale, Model, Predictor, Contrast,
+                  Estimate, SE, DF, t_value, p_value)
+  
+  list(slopes = slopes, pairs = pairs)
+}
+
+diet_slopes_all <- list()
+diet_pairs_all  <- list()
+
+for (time_scale_days in c(10, 1)) {
+  for (spatial_scale in c("hi", "me")) {
+    
+    scale_label <- paste0(time_scale_days, "d_", spatial_scale)
+    
+    models <- read_rds(file.path(
+      models_out_dir,
+      paste0("Mods_trait_interactions_", scale_label, ".rds")
+    ))
+    
+    m_diet_por <- models$model[[which(models$model_label == "Diet x Porosity")]]
+    m_diet_hfi <- models$model[[which(models$model_label == "Diet x HFI")]]
+    
+    em_por <- extract_emtrends(m_diet_por, "pd_adpt_km",
+                               "Diet x Porosity", scale_label)
+    em_hfi <- extract_emtrends(m_diet_hfi, "HFI",
+                               "Diet x HFI", scale_label)
+    
+    diet_slopes_all[[scale_label]] <- bind_rows(em_por$slopes, em_hfi$slopes)
+    diet_pairs_all[[scale_label]]  <- bind_rows(em_por$pairs,  em_hfi$pairs)
+  }
+}
+
+write_csv(bind_rows(diet_slopes_all),
+          file.path(tables_out_dir, "diet_marginal_slopes.csv"))
+write_csv(bind_rows(diet_pairs_all),
+          file.path(tables_out_dir, "diet_pairwise_comparisons.csv"))
+
+message("\nTrait interaction outputs written to ", tables_out_dir)
