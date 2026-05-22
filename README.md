@@ -16,7 +16,7 @@ This project is a subproject of the Global Barrier Project.
 
 We use a global telemetry dataset of terrestrial mammals to test whether
 the spatial **configuration** of human-modified landscapes — quantified as
-*Settlement porosity*, a percolation-based metric of how settlement
+*settlement porosity*, a percolation-based metric of how settlement
 patches are arranged — affects mammalian movement beyond the effect of
 landscape **composition** (the amount or intensity of human modification,
 quantified as Human Footprint Index, Human Modification Index, or
@@ -83,13 +83,14 @@ The scripts depend on the following CRAN packages:
 |--------------|------------------------------------------------------|
 | `nlme`       | Linear mixed-effects models                          |
 | `AICcmodavg` | AIC-based model comparison and predictions           |
-| `MuMIn`      | Marginal and conditional R^2                         |
+| `MuMIn`      | Marginal and conditional R^2 (`01_main_models.R`)    |
+| `emmeans`    | Diet-specific marginal slopes (`03_trait_interaction_models.R`) |
 | `tidyverse`  | Data wrangling (`readr`, `dplyr`, `tidyr`, ...)      |
 
 Install them with:
 
 ```r
-install.packages(c("nlme", "AICcmodavg", "MuMIn", "tidyverse"))
+install.packages(c("nlme", "AICcmodavg", "MuMIn", "emmeans", "tidyverse"))
 ```
 
 The custom `corHaversine` correlation structure is provided as part of
@@ -153,8 +154,8 @@ to per-individual averages of all covariates prior to modeling).
 | `Diet`                | factor    | Dietary guild: `Carnivore`, `Herbivore`, or `Omnivore`            |
 | `BodyMass_kg`         | numeric   | Species-average body mass (kg)                                    |
 | `Displacement_km`     | numeric   | Individual-level displacement (median or 0.95 quantile, depending on file) |
-| `Longitude`           | numeric   | Individual-mean longitude (decimal degrees)                       |
-| `Latitude`            | numeric   | Individual-mean latitude (decimal degrees)                        |
+| `Longitude`           | numeric   | Individual-mean longitude (decimal degrees); `NA` for individuals of sensitive or endangered species whose location data are withheld |
+| `Latitude`            | numeric   | Individual-mean latitude (decimal degrees); `NA` for the same individuals as `Longitude` |
 | `pd_adpt_km`          | numeric   | Settlement porosity (km), derived from the Global Settlement Percolation dataset; matched to the species' mobility scale |
 | `bd_adpt`             | numeric   | Settlement cover (%) at the same matched scale                    |
 | `HFI`                 | numeric   | Human Footprint Index averaged over the displacement path          |
@@ -169,20 +170,27 @@ transformations if desired.
 
 ## Output files
 
-Running all three scripts produces:
+Running all three scripts produces the following files:
 
-- `results/models/Mods_globalbarrier_logdisp_pd_<time>d_<scale>.rds`
-  Main models (3 per composition variable × 3 composition variables = 9
-  per scale).
-- `results/models/Mods_sppVSind_<time>d_<scale>.rds`
-  Partitioning models (4 candidate structures per scale).
-- `results/models/Mods_trait_interactions_<time>d_<scale>.rds`
-  Trait-interaction models (4 candidate structures per scale).
-- `results/tables/main_model_AIC_table.csv`
-- `results/tables/main_model_fixed_effects.csv`
-- `results/tables/partitioning_AIC_table.csv`
-- `results/tables/partitioning_fixed_effects.csv`
-- `results/tables/trait_interaction_fixed_effects.csv`
+**Model objects** (`.rds`, in `results/models/`):
+- `Mods_globalbarrier_logdisp_pd_<time>d_<scale>.rds` — Main models (3 per
+  composition variable × 3 composition variables = 9 per scale).
+- `Mods_sppVSind_<time>d_<scale>.rds` — Partitioning models (4 candidate
+  structures per scale).
+- `Mods_trait_interactions_<time>d_<scale>.rds` — Trait-interaction models
+  (4 candidate structures per scale).
+- `Mods_herbivore_bm_porosity_<time>d_<scale>.rds` — Herbivore-only
+  body mass × porosity follow-up model (1 per scale).
+
+**Result tables** (`.csv`, in `results/tables/`):
+- `main_model_AIC_table.csv`
+- `main_model_fixed_effects.csv`
+- `partitioning_AIC_table.csv`
+- `partitioning_fixed_effects.csv`
+- `trait_interaction_fixed_effects.csv`
+- `herbivore_trait_fixed_effects.csv`
+- `diet_marginal_slopes.csv`
+- `diet_pairwise_comparisons.csv`
 
 Figure-generation code is not included in this repository, as figures are
 purely visualizations of model output that can be regenerated from the
