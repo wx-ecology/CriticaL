@@ -11,7 +11,7 @@ statistical models and tables reported in:
 > [Year]. DOI: [forthcoming] — **manuscript under review**
 
 A frozen archive of this repository is also deposited on Zenodo:
-[Zenodo DOI: forthcoming]
+[Zenodo DOI: 10.5281/zenodo.22730874]
 
 ## Overview
 
@@ -223,7 +223,7 @@ and the Zenodo archive:
 
 > [Paper citation — to be added on acceptance]
 >
-> [Zenodo citation — to be added on archive creation]
+> [Zenodo citation — 10.5281/zenodo.22730874]
 
 ## Contact
 
