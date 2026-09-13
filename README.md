@@ -3,12 +3,15 @@
 This repository contains the code and data needed to reproduce the
 statistical models and tables reported in:
 
-> [Author list]. _[Paper title]_. [Journal], [Year]. DOI: [forthcoming]
+> Wenjing Xu, Larissa T. Beumer, Marlee Tucker, Martin Behnisch,
+> Anna-Katharina Brenner, Nilanjan Chatterjee, Hanna Oosterhoff,
+> Diego Rybski, Martin Schorcht, the Global Animal Movement Barrier
+> Collaboration, Thomas Müller. _Anthropogenic landscape configuration,
+> not just composition, shapes terrestrial mammalian movements_. [Journal],
+> [Year]. DOI: [forthcoming] — **manuscript under review**
 
 A frozen archive of this repository is also deposited on Zenodo:
 [Zenodo DOI: forthcoming]
-
-[note: data not visible for now.]
 
 ## Overview
 
@@ -38,54 +41,51 @@ manuscript:
    relationship. Uses HFI as the composition variable.
 
 3. **Trait-based interaction models** — Supplementary models testing
-   whether body mass and diet modulate movement responses to configuration (i.e. porosity) and
-   to composition (i.e. HFI).
+   whether body mass and diet modulate movement responses to configuration
+   (i.e. porosity) and to composition (i.e. HFI).
 
 ## Repository structure
 
 ```
 .
-├── README.md                     This file
-├── LICENSE                       Code license
-├── code/forGitHub
-│   ├── 00_setup.R                Shared dependencies and helper functions
-│   ├── 01_main_models.R          Main composition vs. configuration models
-│   ├── 02_partitioning_models.R  Behavioral plasticity vs. environmental
-│   │                              filtering partitioning models
-│   ├── 03_trait_interaction_models.R
-│   │                             Supplementary trait × landscape models
-│   └── HaversineLMEfunctions.R   Custom Haversine spatial-correlation
-│                                  function for use with nlme::lme()
-├── data/
-│   ├── global_barrier_mod_input_10d_hi.rds
-│   ├── global_barrier_mod_input_10d_me.rds
-│   ├── global_barrier_mod_input_1d_hi.rds
-│   └── global_barrier_mod_input_1d_me.rds
-└── results/
-    ├── models/                   Created on first run; stores fitted models
-    └── tables/                   Created on first run; stores AIC and
-                                   fixed-effect tables in CSV format
+├── README.md                         This file
+├── LICENSE                           Code license
+├── code_092026/
+│   ├── 00_setup.R                    Shared dependencies and helper functions
+│   ├── 01_main_models.R              Main composition vs. configuration models
+│   ├── 02_partitioning_models.R      Behavioral plasticity vs. environmental
+│   │                                  filtering partitioning models
+│   ├── 03_trait_interaction_models.R Supplementary trait × landscape models
+│   └── HaversineLMEfunctions.R       Custom Haversine spatial-correlation
+│                                      function for use with nlme::lme()
+└── data_092026/
+    ├── global_barrier_mod_input_10d_hi.rds
+    ├── global_barrier_mod_input_10d_me.rds
+    ├── global_barrier_mod_input_1d_hi.rds
+    └── global_barrier_mod_input_1d_me.rds
 ```
+
+Results (model objects and extracted tables) are written to `results/` on
+first run; that directory is created automatically and is not tracked by
+this repository.
 
 ## How to reproduce the analysis
 
 ### 1. System requirements
 
 - R version ≥ 4.3.2 (developed and tested on 4.3.2)
-- A working internet connection is **not** required to reproduce the
-  models — all input data are provided in `data/`.
 
 ### 2. Required R packages
 
 The scripts depend on the following CRAN packages:
 
-| Package      | Purpose                                              |
-|--------------|------------------------------------------------------|
-| `nlme`       | Linear mixed-effects models                          |
-| `AICcmodavg` | AIC-based model comparison and predictions           |
-| `MuMIn`      | Marginal and conditional R^2 (`01_main_models.R`)    |
-| `emmeans`    | Diet-specific marginal slopes (`03_trait_interaction_models.R`) |
-| `tidyverse`  | Data wrangling (`readr`, `dplyr`, `tidyr`, ...)      |
+| Package      | Purpose                                                          |
+|--------------|------------------------------------------------------------------|
+| `nlme`       | Linear mixed-effects models                                      |
+| `AICcmodavg` | AIC-based model comparison and predictions                       |
+| `MuMIn`      | Marginal and conditional R² (`01_main_models.R`)                 |
+| `emmeans`    | Diet-specific marginal slopes (`03_trait_interaction_models.R`)  |
+| `tidyverse`  | Data wrangling (`readr`, `dplyr`, `tidyr`, ...)                  |
 
 Install them with:
 
@@ -94,27 +94,28 @@ install.packages(c("nlme", "AICcmodavg", "MuMIn", "emmeans", "tidyverse"))
 ```
 
 The custom `corHaversine` correlation structure is provided as part of
-this repository in `code/HaversineLMEfunctions.R` and is sourced
+this repository in `code_092026/HaversineLMEfunctions.R` and is sourced
 automatically by `00_setup.R`.
 
 ### 3. Run order
 
 Each analysis script is self-contained and can be run independently. From
-the repository root:
+the repository root, set `data_dir` and `results_dir` in `00_setup.R` to
+match your local paths, then:
 
 ```r
 # Main models (composition vs. configuration)
-source("./code/01_main_models.R")
+source("./code_092026/01_main_models.R")
 
 # Partitioning models (behavioral plasticity vs. environmental filtering)
-source("./code/02_partitioning_models.R")
+source("./code_092026/02_partitioning_models.R")
 
 # Trait-based interaction models
-source("./code/03_trait_interaction_models.R")
+source("./code_092026/03_trait_interaction_models.R")
 ```
 
 Each script will:
-1. Load and preprocess the four input `.rds` files from `data/`.
+1. Load and preprocess the four input `.rds` files from `data_092026/`.
 2. Fit the relevant set of mixed-effects models (this is the slowest
    step; expect minutes to ~hour per script depending on hardware,
    primarily because of the spatial-correlation structure).
@@ -131,36 +132,38 @@ Each of the four input `.rds` files contains an individual-level dataset
 of mammal movement, environmental covariates, and species traits. The
 files differ in the displacement metric used as the response variable:
 
-| File                                        | Displacement window | Summary metric          |
-|---------------------------------------------|---------------------|-------------------------|
-| `global_barrier_mod_input_1d_me.rds`        | 1 day               | Median                  |
-| `global_barrier_mod_input_1d_hi.rds`        | 1 day               | 0.95 quantile (long-distance) |
-| `global_barrier_mod_input_10d_me.rds`       | 10 days             | Median                  |
-| `global_barrier_mod_input_10d_hi.rds`       | 10 days             | 0.95 quantile (long-distance) |
+| File                                         | Displacement window | Summary metric                |
+|----------------------------------------------|---------------------|-------------------------------|
+| `global_barrier_mod_input_1d_me.rds`         | 1 day               | Median                        |
+| `global_barrier_mod_input_1d_hi.rds`         | 1 day               | 0.95 quantile (long-distance) |
+| `global_barrier_mod_input_10d_me.rds`        | 10 days             | Median                        |
+| `global_barrier_mod_input_10d_hi.rds`        | 10 days             | 0.95 quantile (long-distance) |
 
 Each row represents one individual animal (i.e. data have been collapsed
 to per-individual averages of all covariates prior to modeling).
 
 ### Data dictionary
 
-| Column                | Type      | Description                                                       |
-|-----------------------|-----------|-------------------------------------------------------------------|
-| `ID`                  | character | Unique individual identifier                                      |
-| `Binomial`            | character | Species scientific binomial name                                  |
-| `Order`               | character | Taxonomic order                                                   |
-| `Family`              | character | Taxonomic family                                                  |
-| `Genus`               | character | Taxonomic genus                                                   |
-| `Species`             | character | Taxonomic species (specific epithet)                              |
-| `Diet`                | factor    | Dietary guild: `Carnivore`, `Herbivore`, or `Omnivore`            |
-| `BodyMass_kg`         | numeric   | Species-average body mass (kg)                                    |
-| `Displacement_km`     | numeric   | Individual-level displacement (median or 0.95 quantile, depending on file) |
-| `Longitude`           | numeric   | Individual-mean longitude (decimal degrees); `NA` for individuals of sensitive or endangered species whose location data are withheld |
-| `Latitude`            | numeric   | Individual-mean latitude (decimal degrees); `NA` for the same individuals as `Longitude` |
-| `pd_adpt_km`          | numeric   | Settlement porosity (km), derived from the Global Settlement Percolation dataset; matched to the species' mobility scale |
-| `bd_adpt`             | numeric   | Settlement cover (%) at the same matched scale                    |
-| `HFI`                 | numeric   | Human Footprint Index averaged over the displacement path          |
-| `HMI`                 | numeric   | Human Modification Index averaged over the displacement path       |
-| `NDVI`                | numeric   | NDVI averaged over the displacement path (scaled value, multiply by 0.0001 for original) |
+| Column            | Type      | Description                                                                                          |
+|-------------------|-----------|------------------------------------------------------------------------------------------------------|
+| `ID`              | character | Unique individual identifier                                                                         |
+| `Binomial`        | character | Species scientific binomial name                                                                     |
+| `Order`           | character | Taxonomic order                                                                                      |
+| `Family`          | character | Taxonomic family                                                                                     |
+| `Genus`           | character | Taxonomic genus                                                                                      |
+| `Species`         | character | Taxonomic species (specific epithet)                                                                 |
+| `Diet`            | factor    | Dietary guild: `Carnivore`, `Herbivore`, or `Omnivore`                                               |
+| `BodyMass_kg`     | numeric   | Species-average body mass (kg)                                                                       |
+| `Displacement_km` | numeric   | Individual-level displacement (median or 0.95 quantile, depending on file; km)                      |
+| `Longitude`       | numeric   | Individual-mean longitude (decimal degrees); `NA` for individuals whose coordinates are withheld (see note below) |
+| `Latitude`        | numeric   | Individual-mean latitude (decimal degrees); `NA` for the same individuals as `Longitude`             |
+| `pd_adpt_km`      | numeric   | Settlement porosity (km), derived from the Global Settlement Percolation dataset; matched to the species' mobility scale (`pd_scale`) |
+| `pd_scale`        | numeric   | Spatial scale (km) at which settlement porosity was matched to each species                         |
+| `bd_adpt`         | numeric   | Settlement cover (%) at the same matched scale                                                       |
+| `dist_2_build`    | numeric   | Individual-mean distance to the nearest building (km), averaged along the displacement path          |
+| `HFI`             | numeric   | Human Footprint Index averaged over the displacement path                                            |
+| `HMI`             | numeric   | Human Modification Index averaged over the displacement path                                         |
+| `NDVI`            | numeric   | NDVI averaged over the displacement path (scaled value; multiply by 0.0001 for native NDVI units)   |
 
 Within each script, continuous predictors are mean-centered (and, in
 `03_trait_interaction_models.R`, log body mass is additionally
@@ -168,21 +171,31 @@ median-centered) prior to fitting; the raw values in the `.rds` files are
 provided unscaled so that downstream users can apply alternative
 transformations if desired.
 
+### Coordinate suppression
+
+The coordinates (`Longitude`, `Latitude`) of **267 individuals** in the
+10-day displacement files and **205 individuals** in the 1-day displacement
+files have been set to `NA`. These individuals belong to studies for which
+location data cannot be publicly shared due to conservation concerns. All
+other columns for these individuals are intact and contribute fully to the
+fitted models.
+
+Researchers who require access to the withheld coordinates should contact
+the primary investigators of the relevant studies directly. Study-level
+contact information is provided in **Table S1** of the manuscript.
+
 ## Output files
 
 Running all three scripts produces the following files:
 
 **Model objects** (`.rds`, in `results/models/`):
-- `Mods_globalbarrier_logdisp_pd_<time>d_<scale>.rds` — Main models (3 per
-  composition variable × 3 composition variables = 9 per scale).
-- `Mods_sppVSind_<time>d_<scale>.rds` — Partitioning models (4 candidate
-  structures per scale).
-- `Mods_trait_interactions_<time>d_<scale>.rds` — Trait-interaction models
-  (4 candidate structures per scale).
+- `Mods_globalbarrier_logdisp_pd_<time>d_<scale>.rds` — Main models.
+- `Mods_sppVSind_<time>d_<scale>.rds` — Partitioning models.
+- `Mods_trait_interactions_<time>d_<scale>.rds` — Trait-interaction models.
 - `Mods_herbivore_bm_porosity_<time>d_<scale>.rds` — Herbivore-only
-  body mass × porosity follow-up model (1 per scale).
+  body mass × porosity follow-up model.
 
-**Result tables** (`.csv`, in `results/tables/`):
+**Result tables** (`.csv`, in `results/tables/`):\
 - `main_model_AIC_table.csv`
 - `main_model_fixed_effects.csv`
 - `partitioning_AIC_table.csv`
@@ -200,7 +213,6 @@ model objects and tables produced above.
 
 Code in this repository is released under the [MIT License](LICENSE).
 
-
 The accompanying telemetry data are released under [data license:
 forthcoming].
 
@@ -217,4 +229,4 @@ and the Zenodo archive:
 
 For questions about the analysis or reproducibility, contact:
 
-- Wenjing Xu — wenjing.xuuu [at] gmail.com 
+- Wenjing Xu — wenjingxu [at] umass.edu
